@@ -3,7 +3,7 @@
   "short_name": "Wandel",
   "description": "Körper, Training, Ernährung und Gewohnheiten tracken – alles lokal auf dem Gerät.",
   "lang": "de",
-  "start_url": "./#heute",
+  "start_url": "./#tag",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0E1412",

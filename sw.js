@@ -1,7 +1,7 @@
 /* Service Worker: hält nur den Programmcode offline vor. Die Daten (IndexedDB) fasst er nie an.
    Bei jedem Update VERSION erhöhen, dann lädt die App beim nächsten Start den neuen Code. */
-const VERSION = 'wandel-v1';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'wandel-v2';
+const FILES = ['./', 'index.html', 'styles.css', 'content.js', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
