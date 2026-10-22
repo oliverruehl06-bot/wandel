@@ -217,3 +217,18 @@ button.left{text-align:left}
 .block{display:block}
 button.exhead{width:100%;color:var(--ink)}
 .wcard .witem:last-child{border-bottom:0}
+/* Feier nach dem Training */
+.celebrate{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:cfade .3s ease-out}
+.celebrate.out{opacity:0;transition:opacity .35s}
+.celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.cbox{position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px;max-width:320px;animation:cpop .5s cubic-bezier(.2,1.4,.4,1)}
+.cbox svg{width:96px;height:96px;fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.cbox circle{stroke-dasharray:151;stroke-dashoffset:151;animation:cdraw .6s ease-out forwards}
+.cbox path{stroke-dasharray:40;stroke-dashoffset:40;animation:cdraw .4s .5s ease-out forwards}
+.cbox h2{font-size:1.7rem;letter-spacing:-.02em}
+.cbox .prs{font-weight:800;color:var(--go);font-size:1.1rem}
+.cbox .small{color:var(--muted);margin-top:8px}
+@keyframes cdraw{to{stroke-dashoffset:0}}
+@keyframes cpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes cfade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.celebrate,.cbox,.cbox circle,.cbox path{animation:none;stroke-dashoffset:0}}

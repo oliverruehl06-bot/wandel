@@ -487,7 +487,8 @@ VIEWS.tag = () => {
   <div class="card">
     <div class="row between"><span class="label">Training</span><span class="small muted num">${weekCount}/3 in dieser Woche</span></div>
     ${dayWorkouts.map(x => `<div class="donebox"><b>✓ ${h(x.name)}</b> <span class="small muted">${workoutSets(x)} Sätze · ${fmt(workoutVol(x) / 1000, 1)} t</span></div>`).join('')}
-    ${draft ? `<p><b>${h(draft.name)}</b> läuft${draft.date !== today() ? ` (für ${dlong(draft.date)})` : ''}.</p><a class="btn" href="#training">Training fortsetzen</a>` :
+    ${draft ? `<p><b>${h(draft.name)}</b> läuft${draft.date !== today() ? ` (für ${dlong(draft.date)})` : ''}.</p><a class="btn" href="#training">Training fortsetzen</a>
+      <div class="row"><button class="sec grow" data-act="finishWorkout">Beenden und speichern</button><button class="danger grow" data-act="discardWorkout">Löschen</button></div>` :
       ts.length ? `<p class="small muted">${isToday ? 'Training auswählen und starten:' : 'Training für diesen Tag nachtragen:'}</p>
         <div class="tplist">${ts.map(x => `<button class="${nt?.id === x.id ? '' : 'sec'}" data-act="startWorkout" data-id="${x.id}" ${x.items.length ? '' : 'disabled'}>${h(x.name)}${nt?.id === x.id ? '<small>Vorschlag</small>' : ''}${!x.items.length ? '<small>noch leer</small>' : ''}</button>`).join('')}
         <button class="sec" data-act="startFree">Freies Training<small>ohne Plan</small></button></div>` :
@@ -544,7 +545,8 @@ function focusView(d) { // alle Übungen untereinander, eine davon aufgeklappt
   return `${warm}
   ${d.entries.length ? '' : '<div class="card"><p>Noch keine Übung in diesem Training.</p><a class="btn" href="#training/liste">Übung hinzufügen</a></div>'}
   ${d.entries.map((e, i) => i === oi ? openCard(d, e, i) : closedCard(e, i)).join('')}
-  ${d.entries.length ? `<div class="row wrap"><a class="btn sec grow" href="#training/liste">+ Übung</a><button class="${allDone ? '' : 'sec '}grow" data-act="finishWorkout">Training abschließen</button></div>` : ''}`;
+  ${d.entries.length ? `<div class="row wrap"><a class="btn sec grow" href="#training/liste">+ Übung</a><button class="${allDone ? '' : 'sec '}grow" data-act="finishWorkout">Training abschließen</button></div>` : ''}
+  <button class="danger" data-act="discardWorkout">Training löschen</button>`;
 }
 function closedCard(e, i) {
   const ex = S.exercises.get(e.exerciseId), ph = exPhoto(ex), n = e.sets.filter(s => s.done).length, done = n === e.sets.length;
@@ -625,6 +627,43 @@ function trainingSummary() {
   }).join('')}</div></div>
   <div class="card"><h2>Nächstes Mal</h2>${rows.filter(r => r.next).map(r => `<p class="small"><b>${h(r.ex.name)}:</b> ${h(r.next.text)}</p>`).join('')}</div>
   <a class="btn" href="#tag">Fertig</a>`;
+}
+
+/* Feier nach dem Training: Haken, Konfetti, Motivationsspruch */
+let celebrateNext = false;
+const CHEERS = ['Ein Training näher an deinem Ziel.', 'Disziplin schlägt Motivation. Heute hast du geliefert.', 'Deine Muskeln wachsen jetzt. Iss dein Eiweiß und schlaf gut.',
+  'Du hast dir selbst ein Versprechen gehalten.', 'Stärker als letzte Woche. Genau so geht Veränderung.', 'Jeder Satz zählt. Heute waren es richtig viele.'];
+function celebrate() {
+  const w = S.workouts.get(kv('lastSummary', null));
+  const prs = w ? w.entries.filter(e => {
+    const ex = S.exercises.get(e.exerciseId), sets = e.sets.filter(s => s.done); if (!ex || !sets.length) return false;
+    const prev = exHistory(ex.id, w.id).filter(x => x.date <= w.date); if (!prev.length) return false;
+    return topLoad(ex, sets) > Math.max(...prev.map(x => topLoad(ex, x.sets)));
+  }).length : 0;
+  const ov = document.createElement('div');
+  ov.className = 'celebrate'; ov.setAttribute('role', 'status');
+  ov.innerHTML = `<canvas></canvas><div class="cbox"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
+    <h2>Training geschafft!</h2>${prs ? `<p class="prs">${prs} neue${prs > 1 ? '' : 'r'} Bestwert${prs > 1 ? 'e' : ''}</p>` : ''}<p>${CHEERS[Math.floor(Math.random() * CHEERS.length)]}</p><span class="small">Tippen zum Weiter</span></div>`;
+  document.body.appendChild(ov);
+  const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 350); };
+  ov.addEventListener('click', close); setTimeout(close, 3800);
+  // kleiner Erfolgston
+  try { if (audioCtx) [523, 659, 784, 1047].forEach((f, i) => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t0 = audioCtx.currentTime + i * 0.12; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25); o.start(t0); o.stop(t0 + 0.27); }); } catch (e) { }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = ov.querySelector('canvas'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+  const cols = ['#5DC3A5', '#F0915A', '#86A4F0', '#E28BC0', '#C4D35E', '#FFD166'];
+  const parts = [...Array(140)].map(() => ({ x: innerWidth / 2, y: innerHeight * 0.42, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 15 - 4, r: Math.random() * 6 + 4, a: Math.random() * 6, va: (Math.random() - 0.5) * 0.4, c: cols[Math.floor(Math.random() * cols.length)] }));
+  const t0 = performance.now();
+  (function frame(t) {
+    if (!ov.isConnected || t - t0 > 3500) return;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const p of parts) {
+      p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.a += p.va;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore();
+    }
+    requestAnimationFrame(frame);
+  })(t0);
 }
 
 /* Ton, Timer und Bildschirmsperre fürs Training */
@@ -1237,6 +1276,7 @@ ACT.finishWorkout = async el => {
   await del('kv', 'draft');
   await setKv('lastSummary', d.id);
   cur = d.date;
+  celebrateNext = !!done;
   location.hash = '#training/fertig';
 };
 ACT.discardWorkout = async el => { if (!armed(el, 'Wirklich verwerfen?')) return; await del('kv', 'draft'); location.hash = '#tag'; };
@@ -1434,6 +1474,7 @@ function render() {
     });
   }
   if (tab === 'wissen' && sub === 'cheat') cheatCalc();
+  if (tab === 'training' && sub === 'fertig' && celebrateNext) { celebrateNext = false; celebrate(); }
   syncWakeLock();
 }
 window.addEventListener('hashchange', () => { closeViewer(); if (location.hash === '#beratung' && quiz.step >= QUIZ.length && !dietCfg()) quiz = { step: 0, a: {} }; render(); scrollTo(0, 0); });
