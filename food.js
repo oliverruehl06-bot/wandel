@@ -5,7 +5,11 @@ const MEALS = [['f', 'Frühstück'], ['m', 'Mittag'], ['a', 'Abend'], ['s', 'Sna
 const MEAL_NAME = Object.fromEntries(MEALS);
 const MEAL_ICON = { f: 'sunrise', m: 'sun', a: 'moon', s: 'apple' };
 const OFF_WORLD = 'https://world.openfoodfacts.org';
-const OFF_FIELDS = 'code,product_name,product_name_de,brands,nutriments,serving_size,serving_quantity,quantity';
+const OFF_FIELDS = 'code,product_name,product_name_de,brands,nutriments,serving_size,serving_quantity,quantity,nutrition_data_per,categories_tags';
+/* Getränke erkennen: dann Milliliter und Portionen wie Tasse oder Glas */
+const DRINK_RE = /getränk|beverage|\bdrink|kaffee(?!sahne)|coffee|latte\b|cappuccino|espresso|macchiato|\btee\b|eistee|\btea\b|(?:apfel|orangen|trauben|multivitamin|frucht|tomaten|gemüse|karotten|ananas|kirsch|^)saft\b|juice|nektar\b|^(?:laktosefreie |frische |h-)?milch\b|vollmilch\b(?!schoko)|milchdrink|kakao|\bcola\b|limonade|\blimo\b|\bwasser\b|mineralwasser|water\b|shake\b|smoothie|bier\b|(?:rot|weiß|weiss|glüh|\b)wein\b|\bsekt\b|prosecco|schorle|energy ?drink|haferdrink|sojadrink|mandeldrink|kefir|buttermilch/i;
+const DRINK_PORTIONS = [{ l: '1 Tasse', g: 250 }, { l: '1 Glas', g: 200 }, { l: '1 Becher', g: 300 }, { l: '1 Flasche', g: 500 }];
+const isDrinkFood = f => f.unit === 'ml' || f.cat === 'Getränke' || DRINK_RE.test(f.name || '');
 const BASE_BY_ID = new Map(BASE_FOODS.map(f => [f.id, f]));
 const norm = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
 const tempFoods = new Map(); // Online-Treffer, noch nicht gespeichert
@@ -20,13 +24,13 @@ function offToFood(p) {
   const name = (p.product_name_de || p.product_name || '').trim();
   if (kcal == null || !name) return null;
   const portions = [];
-  if (+p.serving_quantity > 0) portions.push({ l: `1 Portion${p.serving_size ? ' (' + p.serving_size + ')' : ''}`, g: +p.serving_quantity });
+  if (+p.serving_quantity > 0) portions.push({ l: p.serving_size ? String(p.serving_size).trim() : '1 Portion', g: +p.serving_quantity });
   const qm = String(p.quantity || '').match(/([\d.,]+)\s*(g|ml|kg|l)\b/i);
   if (qm) { let g = num(qm[1]); if (/^(kg|l)$/i.test(qm[2])) g *= 1000; if (g > 0 && g <= 5000) portions.push({ l: 'Ganze Packung', g }); }
   return {
     id: 'off:' + p.code, code: String(p.code), name, brand: String(p.brands || '').split(',')[0].trim(), src: 'off',
     kcal: Math.round(+kcal), p: +(+n.proteins_100g || 0).toFixed(1), f: +(+n.fat_100g || 0).toFixed(1), c: +(+n.carbohydrates_100g || 0).toFixed(1),
-    unit: qm && /ml|^l$/i.test(qm[2]) ? 'ml' : 'g', portions
+    unit: (qm && /ml|^l$/i.test(qm[2])) || p.nutrition_data_per === '100ml' || /ml/i.test(p.serving_size || '') || (p.categories_tags || []).some(t => /beverage|drink|coffee/.test(t)) || DRINK_RE.test(name) ? 'ml' : 'g', portions
   };
 }
 async function offByCode(code) {
@@ -210,19 +214,21 @@ ESSEN.statistik = () => {
 function openAmount(food, entry) {
   closeAmount();
   const g0 = entry ? entry.g : (food.portions?.[0]?.g || 100);
-  amt = { food, entry, meal: entry ? entry.meal : fs.meal, g: g0 };
+  amt = { food, entry, meal: entry ? entry.meal : fs.meal, g: g0, unit: entry?.unit || (isDrinkFood(food) ? 'ml' : food.unit || 'g') };
   const sh = document.createElement('div'); sh.className = 'sheetwrap'; sh.id = 'amtSheet';
   sh.innerHTML = amountHTML();
   document.body.appendChild(sh);
   setTimeout(() => $('#amtG')?.select(), 50);
 }
 function amountHTML() {
-  const f = amt.food, u = f.unit || 'g', fav = S.foods.get(f.id)?.fav;
-  const chips = [{ l: `100 ${u}`, g: 100 }, ...(f.portions || [])];
+  const f = amt.food, u = amt.unit, fav = S.foods.get(f.id)?.fav;
+  const own = f.portions || [], extra = u === 'ml' ? DRINK_PORTIONS.filter(d => !own.some(o => o.l.startsWith(d.l))) : [];
+  const chips = [...own, ...extra, { l: `100 ${u}`, g: 100 }];
   return `<div class="sheet" role="dialog" aria-label="Menge wählen">
     <div class="row between"><div class="grow"><h2>${h(f.name)}</h2><p class="small muted">${f.brand ? h(f.brand) + ' · ' : ''}${srcLabel(f)}</p></div>${f.src !== 'temp' ? `<button class="icon fav${fav ? ' on' : ''}" data-act="amtFav" aria-label="Favorit">${fav ? '★' : '☆'}</button>` : ''}</div>
     <p class="small muted">Pro 100 ${u}: ${per100(f)}</p>
     <div class="chips">${chips.map(c => `<button class="mchip" data-act="amtChip" data-g="${c.g}">${h(c.l)}${c.l.includes(String(c.g)) ? '' : ` · ${fmt(c.g, 0)} ${u}`}</button>`).join('')}</div>
+    <div class="row between"><span class="small muted">Einheit</span><div class="seg unitseg">${['g', 'ml'].map(x => `<button class="${u === x ? 'on' : ''}" data-act="amtUnit" data-u="${x}">${x === 'g' ? 'Gramm' : 'Milliliter'}</button>`).join('')}</div></div>
     <div class="stepper"><button data-act="amtStep" data-d="-1" aria-label="weniger">−</button><label><input id="amtG" inputmode="decimal" value="${fmt(amt.g, 1)}" aria-label="Menge"><span>${u}</span></label><button data-act="amtStep" data-d="1" aria-label="mehr">+</button></div>
     <div class="seg">${MEALS.map(([k, l]) => `<button class="${amt.meal === k ? 'on' : ''}" data-act="amtMeal" data-m="${k}">${l}</button>`).join('')}</div>
     <p class="amttot num" id="amtTot">${amtTotals()}</p>
@@ -246,13 +252,14 @@ ACT.retryOnline = () => scheduleOnline();
 ACT.pickFood = el => { const f = getFood(el.dataset.id); if (f) openAmount(f); };
 ACT.amtChip = el => { amt.g = +el.dataset.g; const i = $('#amtG'); if (i) i.value = fmt(amt.g, 1); $('#amtTot').innerHTML = amtTotals(); };
 ACT.amtStep = el => { const st = amt.g >= 100 ? 10 : 5; amt.g = Math.max(0, Math.round((amt.g + +el.dataset.d * st) / st) * st); $('#amtG').value = fmt(amt.g, 1); $('#amtTot').innerHTML = amtTotals(); };
+ACT.amtUnit = el => { amt.unit = el.dataset.u; rerenderAmount(); }; // Getränke: 1 ml ≈ 1 g
 ACT.amtMeal = el => { amt.meal = el.dataset.m; rerenderAmount(); };
 ACT.amtClose = () => closeAmount();
 ACT.amtFav = async () => { const f = amt.food, now = !S.foods.get(f.id)?.fav; await cacheFood(f, { fav: now }); toast(now ? 'Als Favorit gespeichert' : 'Favorit entfernt'); rerenderAmount(); };
 ACT.amtSave = async () => {
   const f = amt.food, g = amt.g; if (!(g > 0)) return toast('Bitte eine Menge eingeben.');
   const k = g / 100, old = amt.entry;
-  const rec = { id: old?.id || uid(), date: old?.date || cur, meal: amt.meal, foodId: f.id, name: f.name, brand: f.brand || '', unit: f.unit || 'g', g,
+  const rec = { id: old?.id || uid(), date: old?.date || cur, meal: amt.meal, foodId: f.id, name: f.name, brand: f.brand || '', unit: amt.unit, g,
     kcal: Math.round(f.kcal * k), p: +(f.p * k).toFixed(1), f: +(f.f * k).toFixed(1), c: +(f.c * k).toFixed(1), created: old?.created || Date.now() };
   await put('foodlog', rec);
   if (!old) await cacheFood(f, { used: (S.foods.get(f.id)?.used || 0) + 1, lastUsed: Date.now() });

@@ -378,3 +378,41 @@ body{position:fixed;inset:0;height:auto;width:auto;background:var(--bg)}
 .btn.sec,button.sec{background:var(--field)}
 .ring.lg .val{stroke:url(#ringGrad)}
 .ring.lg.over .val{stroke:var(--warn)}
+
+/* v16: ruhige Cremewelt, immer hell. Gedecktes Türkis und Lila nur als Akzente, keine Verläufe. */
+:root{
+  --bg:#FBF8F2; --card:#F5EEE3; --ink:#3A3241; --muted:#867B83; --line:#E6DCCB; --field:#EEE5D6;
+  --accent:#4C9C92; --accent-ink:#FFFDF8; --accent-soft:#E3EEE6;
+  --lilac:#9282C0; --lilac-soft:#ECE5EF;
+  --go:#5F9A73; --go-soft:#E6EEDF; --warn:#BE8848; --warn-soft:#F5E8D4; --bad:#B6636C; --bad-soft:#F4E2DE;
+  --s0:#4C9C92; --s1:#D19A7E; --s2:#9282C0; --s3:#C891AE; --s4:#C2A35E; --s5:#7F9BC6;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#FBF8F2; --card:#F5EEE3; --ink:#3A3241; --muted:#867B83; --line:#E6DCCB; --field:#EEE5D6;
+  --accent:#4C9C92; --accent-ink:#FFFDF8; --accent-soft:#E3EEE6;
+  --lilac:#9282C0; --lilac-soft:#ECE5EF;
+  --go:#5F9A73; --go-soft:#E6EEDF; --warn:#BE8848; --warn-soft:#F5E8D4; --bad:#B6636C; --bad-soft:#F4E2DE;
+  --s0:#4C9C92; --s1:#D19A7E; --s2:#9282C0; --s3:#C891AE; --s4:#C2A35E; --s5:#7F9BC6;
+  color-scheme:light;
+}}
+html{background:var(--bg)}
+.topbar h1{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--ink)}
+.hero{background:var(--accent-soft)}
+.daynav{background:var(--card)}
+.bigbtn,button.bigbtn,.mchip.on{background:var(--accent);color:var(--accent-ink)}
+.bigbtn{box-shadow:0 6px 16px -10px rgba(76,156,146,.6)}
+.check.on{background:var(--accent);border-color:var(--accent)}
+.ring.lg .val{stroke:var(--accent)}
+.ring.lg.over .val{stroke:var(--warn)}
+.tabbar{background:var(--card);border-top:1px solid var(--line)}
+.tabbar a.on::before{background:var(--accent-soft)}
+.tabbar a.on svg{filter:none}
+.card{box-shadow:0 1px 2px rgba(90,70,50,.06)}
+.seg{background:var(--field)} .seg button.on{background:var(--bg);box-shadow:none}
+.navic{background:var(--lilac-soft)}
+.unitseg{min-width:190px}
+.scanner,.viewer{color-scheme:dark}
+/* untere Leiste näher an den Rand: Abstand zum Home-Balken knapper als der volle Sicherheitsbereich */
+.tabbar{padding-bottom:max(6px, calc(env(safe-area-inset-bottom, 0px) - 14px))}
+.restbar{bottom:calc(58px + max(6px, calc(env(safe-area-inset-bottom, 0px) - 14px)))}
