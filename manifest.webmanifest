@@ -6,6 +6,7 @@
   "start_url": "./#tag",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0E1412",
   "theme_color": "#0E1412",
   "icons": [

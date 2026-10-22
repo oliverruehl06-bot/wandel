@@ -315,6 +315,9 @@ ACT.scan = async () => {
     <p class="small">Strichcode in den Rahmen halten. Klappt es nicht, Nummer eintippen:</p>
     <form data-form="manualCode" class="row"><input name="code" inputmode="numeric" placeholder="z. B. 4000417025005" aria-label="Barcode-Nummer"><button>Suchen</button></form>`;
   document.body.appendChild(ov);
+  applyScanOrientation();
+  window.addEventListener('resize', onScanTurn); window.addEventListener('orientationchange', onScanTurn);
+  try { await screen.orientation?.lock?.('portrait'); } catch (e) { } // klappt auf Android, iOS ignoriert es
   try {
     await loadScript('lib/zxing.min.js');
     const hints = new Map();
@@ -328,7 +331,30 @@ ACT.scan = async () => {
     const p = ov.querySelector('p'); if (p) p.textContent = msg;
   }
 };
-function closeScanner() { try { scanReader?.reset(); } catch (e) { } scanReader = null; $('#scanner')?.remove(); }
+/* iOS dreht Web-Apps beim Neigen mit und erlaubt keine Hochformat-Sperre. Bei Querformat dreht die App
+   den Scanner deshalb zurück (fest wie im Hochformat) und das Kamerabild wieder aufrecht. */
+function scanAngle() {
+  let a = window.__testAngle ?? screen.orientation?.angle ?? window.orientation ?? 0;
+  a = ((+a % 360) + 360) % 360; if (a > 180) a -= 360;
+  return a; // 0, 90, -90 oder 180
+}
+function applyScanOrientation() {
+  const ov = $('#scanner'); if (!ov) return;
+  const a = scanAngle(), W = innerWidth, H = innerHeight, v = $('#scanVideo');
+  if (Math.abs(a) !== 90 || W <= H) { ov.style.cssText = ''; if (v) v.style.cssText = ''; return; }
+  ov.style.cssText = `inset:auto;width:${H}px;height:${W}px;left:${(W - H) / 2}px;top:${(H - W) / 2}px;transform:rotate(${-a}deg)`;
+  requestAnimationFrame(() => {
+    const box = ov.querySelector('.scanbox'); if (!box || !v) return;
+    const bw = box.clientWidth, bh = box.clientHeight;
+    v.style.cssText = `position:absolute;width:${bh}px;height:${bw}px;left:${(bw - bh) / 2}px;top:${(bh - bw) / 2}px;transform:rotate(${a}deg)`;
+  });
+}
+const onScanTurn = () => setTimeout(applyScanOrientation, 60);
+function closeScanner() {
+  try { scanReader?.reset(); } catch (e) { } scanReader = null; $('#scanner')?.remove();
+  window.removeEventListener('resize', onScanTurn); window.removeEventListener('orientationchange', onScanTurn);
+  try { screen.orientation?.unlock?.(); } catch (e) { }
+}
 ACT.closeScan = () => closeScanner();
 FORM.manualCode = async f => { const code = f.code.value.replace(/\D/g, ''); if (code.length < 8) return toast('Bitte die ganze Nummer eingeben.'); scanDone = true; closeScanner(); await handleCode(code); };
 async function handleCode(code) {
