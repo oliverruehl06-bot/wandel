@@ -416,3 +416,16 @@ html{background:var(--bg)}
 /* untere Leiste näher an den Rand: Abstand zum Home-Balken knapper als der volle Sicherheitsbereich */
 .tabbar{padding-bottom:max(6px, calc(env(safe-area-inset-bottom, 0px) - 14px))}
 .restbar{bottom:calc(58px + max(6px, calc(env(safe-area-inset-bottom, 0px) - 14px)))}
+
+/* v17: Lila als Hauptfarbe, Türkis als Akzent (getauscht) */
+:root{
+  --accent:#8573B9; --accent-ink:#FFFDF8; --accent-soft:#ECE6F1;
+  --lilac:#4C9C92; --lilac-soft:#E3EEE6;
+  --s0:#8573B9; --s2:#4C9C92;
+}
+@media (prefers-color-scheme: dark){:root{
+  --accent:#8573B9; --accent-ink:#FFFDF8; --accent-soft:#ECE6F1;
+  --lilac:#4C9C92; --lilac-soft:#E3EEE6;
+  --s0:#8573B9; --s2:#4C9C92;
+}}
+.bigbtn{box-shadow:0 6px 16px -10px rgba(133,115,185,.6)}

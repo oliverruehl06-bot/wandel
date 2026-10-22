@@ -3,7 +3,7 @@
    Datenbank-Regel: Stores werden nur hinzugefügt, nie gelöscht. Jede neue Schema-Version bekommt
    einen eigenen Block in onupgradeneeded, damit bestehende Daten erhalten bleiben. */
 
-const APP_VERSION = 16; // bei jedem Update zusammen mit VERSION in sw.js erhöhen
+const APP_VERSION = 17; // bei jedem Update zusammen mit VERSION in sw.js erhöhen
 const DB_NAME = 'wandel';
 const DB_VER = 3;
 const STORES = {
