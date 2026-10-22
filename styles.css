@@ -166,3 +166,47 @@ details.item.block{display:block}
 details.item.block > .list{padding-top:6px}
 details.item.block > button{margin-top:8px}
 .card > details > summary{list-style:none}
+
+/* v3: geführtes Training */
+.center{text-align:center}
+button.plain,.plain{background:transparent;color:inherit;padding:0;font-weight:inherit;border-radius:0}
+button.left{text-align:left}
+.btn.sm,button.sm{padding:7px 12px;font-size:.85rem;border-radius:10px}
+.thead{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:4;background:var(--bg);display:flex;flex-direction:column;gap:6px;padding:4px 0 6px}
+.focus{gap:14px}
+.exhead{display:flex;gap:12px;align-items:center}
+.exphoto{width:84px;height:84px;flex:none;border-radius:14px;overflow:hidden;padding:0;background:var(--field);display:grid;place-items:center}
+.exphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.exphoto.add{font-size:.75rem;color:var(--accent);text-align:center;font-weight:600;border:2px dashed var(--line);cursor:pointer;line-height:1.3}
+.exname{font-size:1.45rem;letter-spacing:-.01em;text-wrap:balance}
+.hint.up{background:var(--go-soft)}
+.sets{display:flex;flex-direction:column;gap:6px}
+.setrow{display:grid;grid-template-columns:70px 1fr 24px;align-items:center;gap:8px;background:var(--field);color:var(--ink);border-radius:10px;padding:9px 12px;font-weight:500;font-size:.92rem;text-align:left}
+.setrow.done{background:var(--go-soft)} .setrow.done span:last-child{color:var(--go);font-weight:800}
+.cur{display:flex;flex-direction:column;gap:10px;border:2px solid var(--accent);border-radius:14px;padding:12px}
+.stepper{display:grid;grid-template-columns:64px 1fr 64px;gap:8px;align-items:stretch}
+.stepper > button{font-size:1.8rem;line-height:1;padding:0;background:var(--field);color:var(--ink);min-height:60px;border-radius:14px}
+.stepper label{display:flex;align-items:baseline;justify-content:center;gap:6px;background:var(--field);border-radius:14px;padding:0 10px}
+.stepper input{background:transparent;border:0;font-size:1.9rem;font-weight:800;text-align:right;width:5ch;padding:8px 0;font-variant-numeric:tabular-nums}
+.stepper span{color:var(--muted);font-size:.95rem;min-width:3ch}
+.effort{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.effort button{background:var(--field);color:var(--muted);font-size:.85rem;padding:8px 4px;font-weight:600}
+.effort button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.bigbtn{font-size:1.15rem;padding:18px;border-radius:16px;width:100%}
+.witem{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.check.big{width:40px;height:40px}
+.restbar{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:9;display:flex;align-items:center;gap:10px;
+  background:var(--ink);color:var(--bg);padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.restbar b{font-size:1.6rem;font-variant-numeric:tabular-nums;flex:1}
+.restbar .sec{background:transparent;color:var(--bg);box-shadow:inset 0 0 0 1px var(--bg)}
+.mini{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none}
+.mini.ph{display:grid;place-items:center;background:var(--field);color:var(--muted);font-size:.85rem;font-weight:700}
+.warmform{display:grid;grid-template-columns:1fr 48px 1fr auto;gap:6px}
+.warmform input{padding:9px 8px}
+.photoin{display:block;text-align:center;background:var(--field);border:2px dashed var(--line);border-radius:12px;padding:12px;color:var(--accent);font-weight:600;cursor:pointer}
+.exbig{padding:0;border-radius:14px;overflow:hidden;background:var(--field);width:100%;max-height:320px}
+.exbig img{width:100%;max-height:320px;object-fit:cover;display:block}
+.kgrid{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:640px){.kgrid{grid-template-columns:1fr 1fr}}
+.kraft{display:flex;flex-direction:column;gap:4px;background:var(--field);border-radius:12px;padding:12px;color:inherit;text-decoration:none;min-width:0}
+.card.plan > .label{margin-top:4px}

@@ -1,6 +1,6 @@
-/* Service Worker: hält nur den Programmcode offline vor. Die Daten (IndexedDB) fasst er nie an.
-   Bei jedem Update VERSION erhöhen, dann lädt die App beim nächsten Start den neuen Code. */
-const VERSION = 'wandel-v2';
+﻿/* Service Worker: hÃ¤lt nur den Programmcode offline vor. Die Daten (IndexedDB) fasst er nie an.
+   Bei jedem Update VERSION erhÃ¶hen, dann lÃ¤dt die App beim nÃ¤chsten Start den neuen Code. */
+const VERSION = 'wandel-v3';
 const FILES = ['./', 'index.html', 'styles.css', 'content.js', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

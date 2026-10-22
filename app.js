@@ -209,54 +209,72 @@ function milestones(pts) {
 }
 
 /* ---------- Training-Logik ---------- */
-const EQ_TYPES = { lh: ['Langhantel', 2.5], kh: ['Kurzhanteln', 2], kabel: ['Kabelzug', 2.5], maschine: ['Maschine', 5], multi: ['Multipresse', 2.5], kb: ['Kettlebell', 4], koerper: ['Körpergewicht', 0], sonst: ['Sonstiges', 2.5] };
+/* Eine Übung ist zugleich das Gerät: Name, Foto, Einstellung, Gewichtsart. */
+const EQ_TYPES = { lh: ['Langhantel', 2.5], kh: ['Kurzhanteln', 2], kabel: ['Kabelzug', 2.5], maschine: ['Maschine', 5], multi: ['Multipresse', 2.5], kb: ['Kettlebell', 4], koerper: ['Körpergewicht', 0], sonst: ['Sonstiges', 2.5] }; // nur für alte Daten
+const UNITS = { kg: ['Gewicht in kg', 2.5], stufe: ['Stufe am Gerät', 1], none: ['Ohne Gewicht', 0] };
 const MUSCLES = ['Brust', 'Rücken', 'Schultern', 'Bizeps', 'Trizeps', 'Oberschenkel vorne', 'Oberschenkel hinten', 'Po', 'Waden', 'Bauch', 'Ganzkörper'];
-const EX_SUGGEST = ['Bankdrücken', 'Schrägbankdrücken', 'Kurzhantel-Bankdrücken', 'Brustpresse (Maschine)', 'Butterfly', 'Kabelzug-Crossover', 'Liegestütze',
-  'Latzug', 'Klimmzüge', 'Rudern am Kabel (sitzend)', 'Langhantelrudern', 'Kurzhantelrudern einarmig', 'Rudermaschine (Brust gestützt)', 'Face Pulls',
-  'Schulterdrücken (Kurzhantel)', 'Schulterpresse (Maschine)', 'Seitheben', 'Seitheben am Kabel', 'Reverse Butterfly',
-  'Bizepscurls (Kurzhantel)', 'Hammercurls', 'Bizepscurls am Kabel', 'Trizepsdrücken am Kabel', 'French Press', 'Dips (unterstützt)',
-  'Kniebeuge', 'Goblet Squat', 'Beinpresse', 'Beinstrecker', 'Beinbeuger (liegend)', 'Beinbeuger (sitzend)', 'Rumänisches Kreuzheben', 'Hip Thrust',
-  'Ausfallschritte', 'Bulgarian Split Squat', 'Abduktoren-Maschine', 'Adduktoren-Maschine', 'Wadenheben stehend', 'Wadenheben sitzend',
-  'Crunches am Kabel', 'Plank', 'Beinheben hängend', 'Rückenstrecker'];
+const EX_SUGGEST = ['Bankdrücken', 'Schrägbankdrücken', 'Kurzhantel-Bankdrücken', 'Brustpresse', 'Butterfly', 'Kabelzug-Crossover', 'Liegestütze',
+  'Latziehen', 'Latpumpe', 'Klimmzüge', 'Rudern', 'Rudern am Kabel', 'Langhantelrudern', 'Kurzhantelrudern einarmig', 'Face Pulls',
+  'Schulterdrücken', 'Schulterpresse', 'Seitheben', 'Seitheben am Kabel', 'Reverse Butterfly',
+  'Bizepscurls', 'Hammercurls', 'Bizepscurls am Kabel', 'Trizeps am Kabelzug', 'French Press', 'Dips',
+  'Kniebeuge', 'Goblet Squat', 'Beinpresse', 'Beinstrecker', 'Beinbeuger liegend', 'Beinbeuger sitzend', 'Rumänisches Kreuzheben', 'Hip Thrust',
+  'Ausfallschritte', 'Abduktoren', 'Adduktoren', 'Wadenheben', 'Crunches am Kabel', 'Plank', 'Rückenstrecker'];
+const WARM_SUGGEST = ['Fahrrad-Ergometer', 'Rudergerät', 'Crosstrainer', 'Armkreisen', 'Schulterkreisen', 'Band Pull-Aparts', 'Hampelmänner', 'Hüftkreisen', 'Leichter Satz der ersten Übung', 'Mobilisation Brustwirbelsäule'];
 
 const exName = id => S.exercises.get(id)?.name ?? 'Gelöschte Übung';
+const exUnit = ex => ex?.unit || 'kg';
 function incFor(ex) {
-  if (ex.inc != null && ex.inc !== '') return +ex.inc;
+  if (ex.step != null && ex.step !== '') return +ex.step;
+  if (ex.inc != null && ex.inc !== '') return +ex.inc; // alte Daten
   const eq = S.equipment.get(ex.equipmentId);
   if (eq) return eq.inc != null ? +eq.inc : (EQ_TYPES[eq.type]?.[1] ?? 2.5);
-  return 0;
+  return UNITS[exUnit(ex)][1];
+}
+function fmtLoad(v, ex) {
+  const u = exUnit(ex), n = num(v);
+  if (u === 'none') return 'ohne Gewicht';
+  if (n == null) return '–';
+  return u === 'stufe' ? `Stufe ${fmt(n, 1)}` : `${fmt(n, 2)} kg`;
+}
+const unitShort = ex => ({ kg: 'kg', stufe: 'Stufe', none: '' })[exUnit(ex)];
+function fmtSet(s, ex) {
+  const u = exUnit(ex);
+  if (u === 'none') return `${s.reps}`;
+  return `${u === 'stufe' ? 'St.' : ''}${fmt(num(s.kg) ?? 0, 2)}×${s.reps}`;
 }
 const wSort = (a, b) => b.date.localeCompare(a.date) || (b.finished || '').localeCompare(a.finished || '');
-function lastPerf(exId) {
-  for (const w of all('workouts').sort(wSort)) {
-    const e = w.entries.find(e => e.exerciseId === exId && e.sets.some(s => s.done));
-    if (e) return { date: w.date, sets: e.sets.filter(s => s.done) };
-  }
-  return null;
+function exHistory(exId, excludeId) { // älteste zuerst
+  return all('workouts').filter(w => w.id !== excludeId).sort((a, b) => wSort(b, a)).map(w => {
+    const sets = w.entries.filter(e => e.exerciseId === exId).flatMap(e => e.sets.filter(s => s.done));
+    return sets.length ? { date: w.date, sets, wid: w.id } : null;
+  }).filter(Boolean);
 }
-function suggest(ex) {
-  const lp = lastPerf(ex.id), inc = incFor(ex);
-  if (!lp) return { kg: '', reps: ex.repMax, text: `Erstes Mal: Wähle ein Gewicht, mit dem du ${ex.repMin}–${ex.repMax} saubere Wiederholungen schaffst und noch 2–3 im Tank hast.` };
-  const kg = Math.max(...lp.sets.map(s => num(s.kg) ?? 0));
-  const top = lp.sets.filter(s => (num(s.kg) ?? 0) === kg);
-  const hitAll = top.length >= ex.sets && top.every(s => (num(s.reps) ?? 0) >= ex.repMax);
-  const last = `Zuletzt (${dshort(lp.date)}): ${lp.sets.map(s => `${fmt(num(s.kg) ?? 0)}×${s.reps}`).join(', ')}`;
-  if (hitAll) {
-    if (inc > 0) return { kg: kg + inc, reps: ex.repMin, text: `${last}. Alle Sätze bei ${ex.repMax} Wdh. geschafft: Steigere auf ${fmt(kg + inc)} kg.` };
-    return { kg, reps: ex.repMax, text: `${last}. Oberes Ende erreicht: schwierigere Variante oder Zusatzgewicht.` };
+function lastPerf(exId, excludeId) { const hst = exHistory(exId, excludeId); return hst[hst.length - 1] || null; }
+function topLoad(ex, sets) { // Kennzahl einer Einheit: höchstes Gewicht bzw. meiste Wdh. ohne Gewicht
+  if (!sets.length) return null;
+  return exUnit(ex) === 'none' ? Math.max(...sets.map(s => num(s.reps) || 0)) : Math.max(...sets.map(s => num(s.kg) || 0));
+}
+function repsAtTop(ex, sets) { const t = topLoad(ex, sets); if (exUnit(ex) === 'none') return t; return Math.max(...sets.filter(s => (num(s.kg) || 0) === t).map(s => num(s.reps) || 0)); }
+function suggest(ex, excludeId) {
+  const lp = lastPerf(ex.id, excludeId), inc = incFor(ex), u = exUnit(ex);
+  if (!lp) return { kg: '', reps: ex.repMax, first: true, text: u === 'none' ? 'Erstes Mal: so viele saubere Wiederholungen, dass noch 2–3 gehen würden.' : `Erstes Mal: ${u === 'stufe' ? 'Stufe' : 'Gewicht'} wählen, mit der du ${ex.repMin}–${ex.repMax} saubere Wiederholungen schaffst und noch 2–3 gehen würden.` };
+  const last = `Letztes Mal (${dshort(lp.date)}): ${lp.sets.map(s => fmtSet(s, ex)).join(' · ')}`;
+  if (u === 'none') {
+    const best = Math.max(...lp.sets.map(s => num(s.reps) || 0));
+    return { kg: '', reps: best + 1, last, text: best >= ex.repMax ? `Über ${ex.repMax} Wdh.: Nimm leichte Hanteln dazu (Gewichtsart auf kg stellen). Das baut schneller Muskeln auf.` : 'Ziel: pro Satz eine Wiederholung mehr.' };
   }
+  const kg = topLoad(ex, lp.sets);
+  const top = lp.sets.filter(s => (num(s.kg) ?? 0) === kg);
   const minReps = Math.min(...top.map(s => num(s.reps) ?? 0));
-  return { kg, reps: Math.min(ex.repMax, minReps + 1), text: `${last}. Bleib bei ${fmt(kg)} kg und schaffe pro Satz eine Wiederholung mehr (Ziel ${ex.repMax}).` };
+  if (top.length >= Math.min(ex.sets, lp.sets.length) && minReps >= ex.repMax) {
+    const jump = inc > 0 ? (minReps >= ex.repMax + 4 ? inc * 2 : inc) : 0;
+    if (!jump) return { kg, reps: ex.repMax, last, text: 'Oberes Ende erreicht: schwierigere Variante wählen.' };
+    return { kg: kg + jump, reps: ex.repMin, last, up: true, text: `Alle Sätze bei ${ex.repMax}+ Wdh.: steigere auf ${fmtLoad(kg + jump, ex)}${jump > inc ? ' (doppelter Sprung, du warst weit über der Spanne)' : ''}.` };
+  }
+  if (Math.max(...top.map(s => num(s.reps) ?? 0)) < ex.repMin) return { kg, reps: ex.repMin, last, text: `Unter ${ex.repMin} Wdh.: Bleib bei ${fmtLoad(kg, ex)}. Schaffst du wieder keine ${ex.repMin}, geh einen Schritt leichter.` };
+  return { kg, reps: Math.min(ex.repMax, minReps + 1), last, text: `Bleib bei ${fmtLoad(kg, ex)} und schaffe pro Satz eine Wiederholung mehr (Ziel ${ex.repMax}).` };
 }
 const e1rm = (kg, reps) => kg * (1 + reps / 30);
-function bestE1rm(exId) {
-  let best = null;
-  for (const w of all('workouts')) for (const e of w.entries) if (e.exerciseId === exId) for (const s of e.sets) {
-    const kg = num(s.kg), r = num(s.reps);
-    if (s.done && kg && r && r <= 15) { const v = e1rm(kg, r); if (!best || v > best.v) best = { v, kg, r, date: w.date }; }
-  }
-  return best;
-}
 function nextTemplate() {
   const ts = all('templates').sort((a, b) => a.order - b.order);
   if (!ts.length) return null;
@@ -267,10 +285,27 @@ function nextTemplate() {
 }
 const weekStart = d => addDays(d, -((new Date(dayNum(d) * 864e5).getUTCDay() + 6) % 7));
 const workoutSets = w => w.entries.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
-const workoutVol = w => w.entries.reduce((a, e) => a + e.sets.filter(s => s.done).reduce((b, s) => b + (num(s.kg) || 0) * (num(s.reps) || 0), 0), 0);
+const workoutVol = w => w.entries.reduce((a, e) => { const ex = S.exercises.get(e.exerciseId); if (exUnit(ex) !== 'kg') return a; return a + e.sets.filter(s => s.done).reduce((b, s) => b + (num(s.kg) || 0) * (num(s.reps) || 0), 0); }, 0);
 function makeEntry(ex) {
   const sg = suggest(ex);
-  return { exerciseId: ex.id, sets: [...Array(+ex.sets || 3)].map(() => ({ kg: sg.kg === '' ? '' : fmt(sg.kg, 2), reps: String(sg.reps), rir: '', done: false })) };
+  return { exerciseId: ex.id, sets: [...Array(+ex.sets || 3)].map(() => ({ kg: sg.kg === '' ? '' : String(sg.kg), reps: String(sg.reps), rir: '', done: false })) };
+}
+const exPhotoURLs = new Map();
+function exPhoto(ex) {
+  if (!ex?.photo) return null;
+  const key = ex.id + ':' + (ex.photoAt || '');
+  if (!exPhotoURLs.has(key)) exPhotoURLs.set(key, URL.createObjectURL(ex.photo));
+  return exPhotoURLs.get(key);
+}
+async function migrateV3() { // Geräte in Übungen überführen, Pläne um Aufwärmphase erweitern
+  if (kv('migr.v3', false)) return;
+  for (const ex of all('exercises')) {
+    if (ex.unit) continue;
+    const eq = S.equipment.get(ex.equipmentId);
+    await put('exercises', { ...ex, unit: eq?.type === 'koerper' ? 'none' : 'kg', step: incFor(ex), note: [eq?.name, eq?.note, ex.note].filter(Boolean).join(' · '), rest: ex.rest || 90 });
+  }
+  for (const t of all('templates')) if (!t.warmup) await put('templates', { ...t, warmup: [] });
+  await setKv('migr.v3', true);
 }
 
 /* ---------- Tagesziele & Gewohnheiten ---------- */
@@ -376,12 +411,8 @@ function metricDefs() {
     { id: 'trainWeek', g: 'Training', name: 'Trainings pro Woche', unit: '', pts: weeks, goal: 3, digits: 0, line: true, zero: true },
     { id: 'volume', g: 'Training', name: 'Trainingsvolumen', unit: 't', pts: all('workouts').sort(byDate).map(w => ({ d: w.date, y: workoutVol(w) / 1000 })), digits: 1, line: true, zero: true },
     ...all('exercises').sort((a, b) => a.name.localeCompare(b.name, 'de')).map(ex => ({
-      id: 'ex_' + ex.id, g: 'Kraft', name: ex.name, unit: 'kg Max', digits: 0, line: true,
-      pts: all('workouts').sort(byDate).map(w => {
-        let best = null;
-        for (const e of w.entries) if (e.exerciseId === ex.id) for (const s of e.sets) { const kg = num(s.kg), r = num(s.reps); if (s.done && kg && r && r <= 15) best = Math.max(best || 0, e1rm(kg, r)); }
-        return best ? { d: w.date, y: best } : null;
-      }).filter(Boolean)
+      id: 'ex_' + ex.id, g: 'Kraft', name: ex.name, unit: unitShort(ex) || 'Wdh.', digits: 1, line: true,
+      pts: exHistory(ex.id).map(x => ({ d: x.date, y: topLoad(ex, x.sets) }))
     }))
   ];
   for (const m of defs) if (m.avg) m.pts = rolling(m.dots);
@@ -390,8 +421,8 @@ function metricDefs() {
 
 /* ---------- Ansichten ---------- */
 const VIEWS = {};
-const TITLES = { tag: 'Tag', training: 'Training', statistik: 'Statistik', fotos: 'Fotos', wissen: 'Wissen', setup: 'Einstellungen', beratung: 'Beratung' };
-const TAB_OF = { training: 'tag', beratung: 'wissen' };
+const TITLES = { tag: 'Tag', training: 'Training', uebung: 'Übung', statistik: 'Statistik', fotos: 'Fotos', wissen: 'Wissen', setup: 'Einstellungen', beratung: 'Beratung' };
+const TAB_OF = { training: 'tag', beratung: 'wissen', uebung: 'setup' };
 const back = (href, label) => `<a class="back" href="${href}">‹ ${label}</a>`;
 const lis = a => `<ul class="ul">${a.map(x => `<li>${h(x)}</li>`).join('')}</ul>`;
 
@@ -455,7 +486,7 @@ VIEWS.tag = () => {
     <div class="row between"><span class="label">Training</span><span class="small muted num">${weekCount}/3 in dieser Woche</span></div>
     ${dayWorkouts.map(x => `<div class="donebox"><b>✓ ${h(x.name)}</b> <span class="small muted">${workoutSets(x)} Sätze · ${fmt(workoutVol(x) / 1000, 1)} t</span></div>`).join('')}
     ${draft ? `<p><b>${h(draft.name)}</b> läuft${draft.date !== today() ? ` (für ${dlong(draft.date)})` : ''}.</p><a class="btn" href="#training">Training fortsetzen</a>` :
-      ts.length ? `<p class="small muted">${isToday ? 'Welches Training machst du heute?' : 'Training für diesen Tag nachtragen:'}</p>
+      ts.length ? `<p class="small muted">${isToday ? 'Training auswählen und starten:' : 'Training für diesen Tag nachtragen:'}</p>
         <div class="tplist">${ts.map(x => `<button class="${nt?.id === x.id ? '' : 'sec'}" data-act="startWorkout" data-id="${x.id}" ${x.items.length ? '' : 'disabled'}>${h(x.name)}${nt?.id === x.id ? '<small>Vorschlag</small>' : ''}${!x.items.length ? '<small>noch leer</small>' : ''}</button>`).join('')}
         <button class="sec" data-act="startFree">Freies Training<small>ohne Plan</small></button></div>` :
       `<p class="muted small">Lege zuerst Geräte, Übungen und Pläne an.</p><a class="btn sec" href="#setup/training">Training einrichten</a>`}
@@ -479,34 +510,142 @@ VIEWS.tag = () => {
   ${tip ? `<div class="card tipcard"><span class="label">Tipp</span><p class="small">${h(tip)}</p></div>` : ''}`;
 };
 
-/* Laufendes Training */
-VIEWS.training = () => {
-  const d = kv('draft', null);
+/* Laufendes Training: geführter Modus, eine Übung pro Bildschirm */
+const draft = () => kv('draft', null);
+const saveDraft = d => setKv('draft', d);
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, '0')}`;
+const curIdx = d => clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1));
+const DEF_REPS = { kg: [8, 12], stufe: [10, 15], none: [12, 20] };
+const fmtTop = (ex, v) => v == null ? '–' : exUnit(ex) === 'none' ? `${fmt(v, 0)} Wdh.` : fmtLoad(v, ex);
+
+VIEWS.training = sub => {
+  if (sub === 'fertig') return trainingSummary();
+  const d = draft();
   if (!d) return '<div class="card"><p class="empty">Kein laufendes Training.</p><a class="btn" href="#tag">Zum Tag</a></div>';
-  const exs = all('exercises').sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  return `
-  <div class="card"><div class="row between"><div><h2>${h(d.name)}</h2><p class="small muted">${dlong(d.date)} · seit ${new Date(d.started).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</p></div><a class="small link" href="#tag">Minimieren</a></div>
-  <p class="small muted">Gewicht, Wiederholungen und RIR (wie viele Wdh. noch gegangen wären) eintragen, dann ✓ tippen. Alles wird sofort gespeichert. Weicht das Training heute vom Plan ab, füge unten Übungen hinzu oder entferne sie. Der Plan selbst bleibt unverändert.</p></div>
-  ${d.entries.map((e, ei) => {
-    const ex = S.exercises.get(e.exerciseId), sg = ex ? suggest(ex) : null;
-    return `<div class="card">
-      <div class="row between"><h2>${h(exName(e.exerciseId))}</h2><span class="small muted">${ex ? `${ex.repMin}–${ex.repMax} Wdh.` : ''}</span></div>
-      ${sg ? `<p class="hint">${h(sg.text)}</p>` : ''}
-      <div class="set head"><span>#</span><span>kg</span><span>Wdh.</span><span>RIR</span><span></span></div>
-      ${e.sets.map((s, si) => `<div class="set${s.done ? ' done' : ''}"><span class="n">${si + 1}</span>
-        <input inputmode="decimal" value="${h(s.kg)}" data-set="${ei}:${si}:kg" aria-label="Gewicht Satz ${si + 1}">
-        <input inputmode="numeric" value="${h(s.reps)}" data-set="${ei}:${si}:reps" aria-label="Wiederholungen Satz ${si + 1}">
-        <input inputmode="numeric" value="${h(s.rir)}" data-set="${ei}:${si}:rir" placeholder="2" aria-label="RIR Satz ${si + 1}">
-        <button class="check${s.done ? ' on' : ''}" data-act="toggleSet" data-e="${ei}" data-s="${si}" aria-label="Satz ${si + 1} fertig" aria-pressed="${!!s.done}"></button></div>`).join('')}
-      <div class="row"><button class="ghost" data-act="addSet" data-e="${ei}">+ Satz</button><button class="ghost" data-act="removeSet" data-e="${ei}" ${e.sets.length <= 1 ? 'disabled' : ''}>− Satz</button><span class="grow"></span><button class="ghost bad" data-act="removeEntry" data-e="${ei}">Entfernen</button></div>
-    </div>`;
-  }).join('')}
-  <div class="card">
-    <select data-addentry="1" aria-label="Übung zum Training hinzufügen"><option value="">+ Übung hinzufügen</option>${exs.map(x => `<option value="${x.id}">${h(x.name)}</option>`).join('')}</select>
-    <button data-act="finishWorkout">Training abschließen</button>
-    <button class="danger" data-act="discardWorkout">Training verwerfen</button>
-  </div>`;
+  const tot = d.entries.reduce((a, e) => a + e.sets.length, 0), dn = d.entries.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
+  const head = `<div class="thead"><div class="row between"><div class="grow"><b>${h(d.name)}</b><p class="small muted"><span id="elapsed">${mmss((Date.now() - new Date(d.started)) / 1000)}</span> · ${dn}/${tot} Sätze${d.date !== today() ? ` · für ${dlong(d.date)}` : ''}</p></div>
+    ${sub === 'liste' ? '<a class="btn sec sm" href="#training">Zurück zur Übung</a>' : '<a class="btn sec sm" href="#training/liste">Übersicht</a>'}</div>${bar(dn, tot || 1)}</div>`;
+  const rest = d.restUntil && d.restUntil > Date.now() ? `<div class="restbar" id="restBar"><span>Pause</span><b id="restTime">${mmss((d.restUntil - Date.now()) / 1000)}</b><button class="sec sm" data-act="restAdd">+30 s</button><button class="sm" data-act="restSkip">Weiter</button></div>` : '';
+  return head + (sub === 'liste' ? trainingList(d) : focusView(d)) + rest + '<input type="file" id="exPhotoIn" accept="image/*" hidden>';
 };
+function stepper(f, v, unit) {
+  return `<div class="stepper"><button data-act="step" data-f="${f}" data-d="-1" aria-label="${unit} weniger">−</button>
+    <label><input inputmode="decimal" data-cur="${f}" value="${v === '' || v == null ? '' : h(fmt(num(v), 2))}" placeholder="–" aria-label="${unit}"><span>${unit}</span></label>
+    <button data-act="step" data-f="${f}" data-d="1" aria-label="${unit} mehr">+</button></div>`;
+}
+function focusView(d) {
+  if (d.phase === 'warm' && d.warmup?.length) {
+    return `<div class="card focus"><span class="label">Phase 1 · Aufwärmen</span>
+      ${d.warmup.map((w, wi) => `<div class="witem"><div class="grow"><b>${h(w.name)}</b>${w.detail ? `<p class="small muted">${h(w.detail)}</p>` : ''}</div>
+        <div class="row">${w.done.map((x, si) => `<button class="check big${x ? ' on' : ''}" data-act="warmSet" data-w="${wi}" data-s="${si}" aria-label="${h(w.name)} Satz ${si + 1}" aria-pressed="${x}"></button>`).join('')}</div></div>`).join('')}
+      <button class="bigbtn" data-act="warmDone">Weiter zum Training ›</button></div>`;
+  }
+  if (!d.entries.length) return '<div class="card"><p>Noch keine Übung in diesem Training.</p><a class="btn" href="#training/liste">Übung hinzufügen</a></div>';
+  if (d.entries.every(e => e.sets.every(s => s.done))) return `<div class="card focus hero"><h2>Alle Übungen geschafft</h2><p class="small">Stark. Schließe das Training ab, dann siehst du deine Bestwerte und den Vergleich zum letzten Mal.</p>
+    <button class="bigbtn" data-act="finishWorkout">Training abschließen</button><a class="btn sec" href="#training/liste">Noch etwas ergänzen</a></div>`;
+  const i = curIdx(d), e = d.entries[i], ex = S.exercises.get(e.exerciseId) || { id: '', name: 'Gelöschte Übung', unit: 'kg', repMin: 8, repMax: 12, sets: 3 };
+  const sg = ex.id ? suggest(ex, d.id) : null, ci = e.sets.findIndex(s => !s.done), cs = e.sets[ci], u = exUnit(ex), ph = exPhoto(ex);
+  const next = d.entries.slice(i + 1).find(x => x.sets.some(s => !s.done));
+  return `<div class="card focus">
+    <div class="row between"><span class="label">Übung ${i + 1} von ${d.entries.length}</span><span class="small muted">${ex.repMin}–${ex.repMax} Wdh. · Pause ${ex.rest || 90} s</span></div>
+    <div class="exhead">${ph ? `<button class="exphoto" data-act="zoomEx" data-id="${ex.id}" aria-label="Foto vergrößern"><img src="${ph}" alt=""></button>` : ex.id ? `<label class="exphoto add" for="exPhotoIn" data-exid="${ex.id}">+ Foto<br>vom Gerät</label>` : ''}
+      <div class="grow"><h2 class="exname">${h(ex.name)}</h2>${ex.note ? `<p class="small muted">${h(ex.note)}</p>` : ''}</div></div>
+    ${sg?.last ? `<p class="small muted">${h(sg.last)}</p>` : ''}
+    ${sg ? `<p class="hint${sg.up ? ' up' : ''}">${h(sg.text)}</p>` : ''}
+    <div class="sets">${e.sets.map((s, si) => si === ci ? '' : s.done
+      ? `<button class="setrow done" data-act="reopenSet" data-s="${si}" aria-label="Satz ${si + 1} wieder öffnen"><span>Satz ${si + 1}</span><span class="num">${u === 'none' ? '' : fmtLoad(s.kg, ex) + ' × '}${s.reps} Wdh.</span><span>✓</span></button>`
+      : `<div class="setrow"><span>Satz ${si + 1}</span><span class="num muted">${u === 'none' ? '' : fmtLoad(s.kg, ex) + ' × '}${s.reps || '–'} Wdh.</span><span></span></div>`).join('')}</div>
+    ${cs ? `<div class="cur"><span class="label">Satz ${ci + 1} von ${e.sets.length}</span>
+      ${u !== 'none' ? stepper('kg', cs.kg, u === 'stufe' ? 'Stufe' : 'kg') : ''}
+      ${stepper('reps', cs.reps, 'Wdh.')}
+      <div class="effort" role="group" aria-label="Wie schwer war der Satz? (optional)">${[['3', 'Locker'], ['2', 'Gut'], ['0', 'Am Limit']].map(([v, l]) => `<button class="${cs.rir === v ? 'on' : ''}" data-act="rir" data-v="${v}">${l}</button>`).join('')}</div>
+      <button class="bigbtn" data-act="doneSet">Satz geschafft ✓</button></div>` : ''}
+    <div class="row between"><button class="ghost" data-act="exNav" data-d="-1" ${i === 0 ? 'disabled' : ''}>‹ Zurück</button><button class="ghost" data-act="addSet">+ Satz</button><button class="ghost" data-act="exNav" data-d="1" ${i === d.entries.length - 1 ? 'disabled' : ''}>Weiter ›</button></div>
+  </div>
+  ${next ? `<p class="small muted center">Danach: ${h(exName(next.exerciseId))}</p>` : ''}`;
+}
+function trainingList(d) {
+  const exs = all('exercises').filter(x => !d.entries.some(e => e.exerciseId === x.id)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  const wd = (d.warmup || []).reduce((a, w) => a + w.done.filter(Boolean).length, 0), wt = (d.warmup || []).reduce((a, w) => a + w.done.length, 0);
+  return `<div class="card"><div class="list">
+    ${wt ? `<button class="item navitem plain" data-act="goWarm"><span class="chip ${wd === wt ? 'c-go' : 'c-acc'}">${wd}/${wt}</span><span class="grow">Aufwärmen</span>›</button>` : ''}
+    ${d.entries.map((e, i) => { const n = e.sets.filter(s => s.done).length; return `<div class="item"><span class="chip ${n === e.sets.length ? 'c-go' : n ? 'c-warn' : 'c-acc'}">${n}/${e.sets.length}</span>
+      <button class="grow plain left" data-act="jumpTo" data-i="${i}">${h(exName(e.exerciseId))}</button>
+      <button class="icon" data-act="moveEntry" data-i="${i}" data-dir="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="icon" data-act="removeEntry" data-i="${i}" aria-label="Übung entfernen">×</button></div>`; }).join('')}
+  </div></div>
+  <div class="card"><h2>Übung hinzufügen</h2>
+    ${exs.length ? `<select data-addentry="1" aria-label="Vorhandene Übung hinzufügen"><option value="">Vorhandene Übung wählen</option>${exs.map(x => `<option value="${x.id}">${h(x.name)}</option>`).join('')}</select>` : ''}
+    <p class="small muted">Oder neues Gerät direkt anlegen:</p>
+    ${quickExForm('draft', !!d.templateId)}
+  </div>
+  <div class="card"><button data-act="finishWorkout">Training abschließen</button><button class="danger" data-act="discardWorkout">Training verwerfen</button></div>`;
+}
+function quickExForm(target, offerPlan) {
+  return `<form data-form="quickEx" class="stack"><input type="hidden" name="target" value="${target}">
+    <input name="name" list="exsuggest" required placeholder="Name, z. B. Latziehen" aria-label="Name der Übung">
+    <datalist id="exsuggest">${EX_SUGGEST.map(x => `<option value="${h(x)}">`).join('')}</datalist>
+    <div class="grid2"><select name="unit" aria-label="Gewichtsart">${Object.entries(UNITS).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select>
+    <label class="photoin"><input type="file" name="photo" accept="image/*" hidden><span>+ Foto</span></label></div>
+    ${offerPlan ? '<label class="row small"><input type="checkbox" name="toPlan" checked style="width:auto"> Auch im Plan speichern</label>' : ''}
+    <button>Anlegen und hinzufügen</button></form>`;
+}
+function trainingSummary() {
+  const w = S.workouts.get(kv('lastSummary', null));
+  if (!w) return '<div class="card"><p class="empty">Keine Zusammenfassung vorhanden.</p><a class="btn" href="#tag">Zum Tag</a></div>';
+  const mins = w.finished && w.started ? Math.round((new Date(w.finished) - new Date(w.started)) / 60000) : null;
+  const rows = w.entries.filter(e => e.sets.some(s => s.done)).map(e => {
+    const ex = S.exercises.get(e.exerciseId) || { name: 'Gelöschte Übung', unit: 'kg' }, sets = e.sets.filter(s => s.done);
+    const prev = ex.id ? exHistory(ex.id, w.id).filter(x => x.date <= w.date) : [];
+    const now = topLoad(ex, sets), last = prev.length ? topLoad(ex, prev[prev.length - 1].sets) : null;
+    const best = prev.length ? Math.max(...prev.map(x => topLoad(ex, x.sets))) : null;
+    const pr = prev.length && (now > best || (now === best && repsAtTop(ex, sets) > Math.max(...prev.filter(x => topLoad(ex, x.sets) === best).map(x => repsAtTop(ex, x.sets)))));
+    return { ex, sets, now, last, pr, first: !prev.length, next: ex.id ? suggest(ex) : null };
+  });
+  const prs = rows.filter(r => r.pr);
+  return `<div class="card hero"><span class="label">Training gespeichert</span><h2>${h(w.name)}</h2>
+    <div class="grid2"><div><p class="small muted">Dauer</p><b class="num">${mins != null ? mins + ' min' : '–'}</b></div><div><p class="small muted">Sätze</p><b class="num">${workoutSets(w)}</b></div>
+    <div><p class="small muted">Bewegtes Gewicht</p><b class="num">${fmt(workoutVol(w) / 1000, 1)} t</b></div><div><p class="small muted">Neue Bestwerte</p><b class="num">${prs.length}</b></div></div></div>
+  ${prs.length ? `<div class="card"><h2>Neue Bestwerte</h2>${prs.map(r => `<p><b>${h(r.ex.name)}</b>: ${exUnit(r.ex) === 'none' ? fmtTop(r.ex, r.now) : `${fmtTop(r.ex, r.now)} × ${repsAtTop(r.ex, r.sets)}`}</p>`).join('')}</div>` : ''}
+  <div class="card"><h2>Im Vergleich zum letzten Mal</h2><div class="list">${rows.map(r => {
+    const dlt = r.last != null ? r.now - r.last : null;
+    return `<div class="item"><div class="grow"><b>${h(r.ex.name)}</b><p class="small muted">${r.sets.map(s => fmtSet(s, r.ex)).join(' · ')}</p></div>
+      <span class="chip ${r.first ? 'c-acc' : dlt > 0 ? 'c-go' : dlt < 0 ? 'c-warn' : 'c-acc'}">${r.first ? 'erstes Mal' : dlt > 0 ? '+' + fmt(dlt, 2) : dlt < 0 ? fmt(dlt, 2) : 'gleich'}</span></div>`;
+  }).join('')}</div></div>
+  <div class="card"><h2>Nächstes Mal</h2>${rows.filter(r => r.next).map(r => `<p class="small"><b>${h(r.ex.name)}:</b> ${h(r.next.text)}</p>`).join('')}</div>
+  <a class="btn" href="#tag">Fertig</a>`;
+}
+
+/* Ton, Timer und Bildschirmsperre fürs Training */
+let audioCtx, wakeLock = null;
+function unlockAudio() { try { audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) { } }
+function beep() {
+  try {
+    if (audioCtx) [0, 0.3, 0.6].forEach(t => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t0 = audioCtx.currentTime + t;
+      o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      o.start(t0); o.stop(t0 + 0.22);
+    });
+    navigator.vibrate?.([200, 100, 200]);
+  } catch (e) { }
+}
+async function syncWakeLock() {
+  const want = location.hash.startsWith('#training') && !!draft() && !document.hidden;
+  try {
+    if (want && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!want && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { }
+}
+setInterval(() => {
+  const d = S.kv ? draft() : null; if (!d) return;
+  const el = $('#elapsed'); if (el) el.textContent = mmss((Date.now() - new Date(d.started)) / 1000);
+  if (d.restUntil) {
+    const left = (d.restUntil - Date.now()) / 1000;
+    if (left <= 0) { d.restUntil = null; saveDraft(d); beep(); toast('Pause vorbei: nächster Satz'); if (location.hash.startsWith('#training')) render(); }
+    else { const rt = $('#restTime'); if (rt) rt.textContent = mmss(left); }
+  }
+}, 1000);
 
 /* Statistik */
 VIEWS.statistik = () => {
@@ -567,6 +706,7 @@ VIEWS.statistik = () => {
       ${chart([...(dots ? [{ pts: dots, cls: 'dots' }] : []), { pts, cls: m.line ? 'line' : 'trend' }], { goal: m.goal, label: m.name, h: 130, minPad: m.digits ? 0.5 : 1, zero: m.zero, empty: 'Noch zu wenig Daten im Zeitraum.' })}</div>`;
   }).join('')}</div>` : ''}
 
+  ${strengthCard()}
   <div class="card">
     <h2>Ziele in den letzten 30 Tagen</h2>
     <div class="list">
@@ -624,6 +764,12 @@ function openViewer(id) {
   document.body.appendChild(v);
 }
 const closeViewer = () => $('#viewer')?.remove();
+function openImage(src, title) {
+  closeViewer();
+  const v = document.createElement('div'); v.className = 'viewer'; v.id = 'viewer';
+  v.innerHTML = `<div class="vbar"><span>${h(title)}</span><button class="icon" data-act="closePhoto" aria-label="Schließen">×</button></div><img src="${src}" alt="${h(title)}"><div></div>`;
+  document.body.appendChild(v);
+}
 function loadImage(file) {
   return new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error('Bild konnte nicht gelesen werden')); img.src = URL.createObjectURL(file); });
 }
@@ -779,85 +925,126 @@ SETUP.index = () => `<div class="card"><div class="list">
   ${[['training', 'Training', 'Geräte, Übungen, Pläne, Verlauf'], ['ernaehrung', 'Ernährung und Ziele', 'Ernährungsform, Bausteine, Mahlzeiten, Kalorien- und Eiweißziel'], ['gewohnheiten', 'Gewohnheiten', 'Anlegen, umbenennen, sortieren'], ['profil', 'Profil', 'Größe, Alter, Start- und Zielgewicht'], ['daten', 'Datensicherung', 'Backup erstellen und wiederherstellen']]
     .map(([k, t, s]) => `<a class="item navitem" href="#setup/${k}"><div class="grow"><b>${t}</b><p class="small muted">${s}</p></div>›</a>`).join('')}
   </div></div>`;
-const editing = { equipment: null, exercise: null };
 SETUP.training = sub => {
-  sub = sub || 'plaene';
-  const tabs = [['plaene', 'Pläne'], ['uebungen', 'Übungen'], ['geraete', 'Geräte'], ['verlauf', 'Verlauf']];
+  sub = sub === 'geraete' ? 'uebungen' : sub || 'plaene';
+  const tabs = [['plaene', 'Pläne'], ['uebungen', 'Übungen & Geräte'], ['verlauf', 'Verlauf']];
   return back('#setup', 'Einstellungen') + `<div class="seg">${tabs.map(([k, l]) => `<button class="${sub === k ? 'on' : ''}" data-act="go" data-href="#setup/training/${k}">${l}</button>`).join('')}</div>` + (TRAIN[sub] || TRAIN.plaene)();
 };
 const TRAIN = {};
-TRAIN.geraete = () => {
-  const eqs = all('equipment').sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  const ed = editing.equipment ? S.equipment.get(editing.equipment) : null;
-  return `
-  <div class="card">
-    <h2>${ed ? 'Gerät bearbeiten' : 'Neues Gerät'}</h2>
-    <p class="small muted">Den offiziellen Namen musst du nicht kennen. Nimm einen Namen, den ihr benutzt, z. B. „Grüne Beinmaschine" oder „Kabelturm links".</p>
-    <form data-form="equipment" class="stack">
-      <label class="f">Name<input name="name" required value="${h(ed?.name)}" placeholder="z. B. Kabelturm"></label>
-      <div class="grid2">
-        <label class="f">Art<select name="type">${Object.entries(EQ_TYPES).map(([k, [l]]) => `<option value="${k}" ${ed?.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="f">Gewichtssprung (kg)<input name="inc" inputmode="decimal" value="${ed ? fmt(ed.inc, 2) : ''}" placeholder="automatisch"></label>
-      </div>
-      <p class="small muted"><b>Gewichtssprung:</b> Um wie viel kg kannst du an diesem Gerät mindestens erhöhen? Steckgewichte in 5-kg-Stufen → 5. Kurzhanteln 10, 12, 14 kg → 2. Langhantel mit 1,25-kg-Scheiben auf jeder Seite → 2,5. Die App nutzt den Wert, um dir das nächste Gewicht vorzuschlagen.</p>
-      <label class="f">Notiz<input name="note" value="${h(ed?.note)}" placeholder="z. B. Sitz auf Stufe 4"></label>
-      <div class="row"><button class="grow">${ed ? 'Änderungen speichern' : 'Gerät anlegen'}</button>${ed ? '<button type="button" class="sec" data-act="cancelEdit" data-kind="equipment">Abbrechen</button>' : ''}</div>
-    </form>
-  </div>
-  <div class="card"><h2>Eure Geräte (${eqs.length})</h2>
-    <div class="list">${eqs.map(e => `<div class="item"><div class="grow"><b>${h(e.name)}</b><p class="small muted">${EQ_TYPES[e.type]?.[0] ?? ''} · Sprung ${fmt(e.inc, 2)} kg${e.note ? ' · ' + h(e.note) : ''}</p></div><button class="ghost" data-act="edit" data-kind="equipment" data-id="${e.id}">Bearbeiten</button><button class="icon" data-act="delEquipment" data-id="${e.id}" aria-label="Gerät löschen">×</button></div>`).join('') || '<p class="empty">Noch keine Geräte.</p>'}</div>
-  </div>`;
-};
-TRAIN.uebungen = () => {
-  const exs = all('exercises').sort((a, b) => MUSCLES.indexOf(a.muscle) - MUSCLES.indexOf(b.muscle) || a.name.localeCompare(b.name, 'de'));
-  const eqs = all('equipment').sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  const ed = editing.exercise ? S.exercises.get(editing.exercise) : null;
-  let lastMuscle = null;
-  return `
-  <div class="card">
-    <h2>${ed ? 'Übung bearbeiten' : 'Neue Übung'}</h2>
-    <form data-form="exercise" class="stack">
-      <label class="f">Name<input name="name" list="exsuggest" required value="${h(ed?.name)}" placeholder="Tippen für Vorschläge"></label>
-      <datalist id="exsuggest">${EX_SUGGEST.map(x => `<option value="${h(x)}">`).join('')}</datalist>
-      <div class="grid2">
-        <label class="f">Gerät<select name="equipmentId"><option value="">Ohne Gerät</option>${eqs.map(e => `<option value="${e.id}" ${ed?.equipmentId === e.id ? 'selected' : ''}>${h(e.name)}</option>`).join('')}</select></label>
-        <label class="f">Hauptmuskel<select name="muscle">${MUSCLES.map(m => `<option ${ed?.muscle === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
-        <label class="f">Wdh. von<input name="repMin" inputmode="numeric" value="${ed?.repMin ?? 8}"></label>
-        <label class="f">Wdh. bis<input name="repMax" inputmode="numeric" value="${ed?.repMax ?? 12}"></label>
-        <label class="f">Sätze<input name="sets" inputmode="numeric" value="${ed?.sets ?? 3}"></label>
-        <label class="f">Gewichtssprung (kg)<input name="inc" inputmode="decimal" value="${ed?.inc ?? ''}" placeholder="vom Gerät"></label>
-      </div>
-      <div class="row"><button class="grow">${ed ? 'Änderungen speichern' : 'Übung anlegen'}</button>${ed ? '<button type="button" class="sec" data-act="cancelEdit" data-kind="exercise">Abbrechen</button>' : ''}</div>
-    </form>
-  </div>
-  <div class="card"><h2>Übungen (${exs.length})</h2>
-    <div class="list">${exs.map(x => {
-      const b = bestE1rm(x.id), eq = S.equipment.get(x.equipmentId);
-      const head = x.muscle !== lastMuscle ? `<p class="label" style="padding-top:10px">${h(x.muscle)}</p>` : '';
-      lastMuscle = x.muscle;
-      return `${head}<div class="item"><div class="grow"><b>${h(x.name)}</b><p class="small muted">${eq ? h(eq.name) : 'Ohne Gerät'} · ${x.sets}×${x.repMin}–${x.repMax}${b ? ` · Bestwert ${fmt(b.kg)} kg × ${b.r}` : ''}</p></div><button class="ghost" data-act="edit" data-kind="exercise" data-id="${x.id}">Bearbeiten</button><button class="icon" data-act="delExercise" data-id="${x.id}" aria-label="Übung löschen">×</button></div>`;
-    }).join('') || '<p class="empty">Noch keine Übungen.</p>'}</div>
-  </div>`;
-};
+/* Dein letztes Training vor der App, zum einmaligen Übernehmen */
+const LAST_TRAINING = [
+  ['Schrägbankdrücken', 'Brust', 'kg', 2.5, 6, 10, [[50, 6], [50, 6], [50, 5]]],
+  ['Latziehen', 'Rücken', 'kg', 2.5, 8, 12, [[50, 16], [50, 16], [50, 16]]],
+  ['Rudern', 'Rücken', 'kg', 2.5, 8, 12, [[40, 16], [40, 16], [40, 16]]],
+  ['Butterfly', 'Brust', 'kg', 2.5, 10, 15, [[25, 13], [25, 13], [25, 13]]],
+  ['Latpumpe', 'Rücken', 'stufe', 1, 10, 15, [[3, 13], [3, 13], [3, 13]]],
+  ['Seitheben', 'Schultern', 'none', 0, 12, 20, [[0, 40], [0, 40], [0, 40]]],
+  ['Bizepscurls', 'Bizeps', 'kg', 2, 10, 15, [[5, 12], [5, 12], [5, 12]]],
+  ['Trizeps am Kabelzug', 'Trizeps', 'stufe', 1, 10, 15, [[4, 18], [4, 18], [4, 18]]]
+];
+function exerciseForm(ed) {
+  const u = ed?.unit || 'kg', [r0, r1] = DEF_REPS[u];
+  return `<form data-form="exercise" class="stack"><input type="hidden" name="id" value="${ed?.id || ''}">
+    <label class="f">Name<input name="name" list="exsuggest" required value="${h(ed?.name)}" placeholder="Name, den ihr benutzt, z. B. Latziehen"></label>
+    <datalist id="exsuggest">${EX_SUGGEST.map(x => `<option value="${h(x)}">`).join('')}</datalist>
+    <label class="photoin"><input type="file" name="photo" accept="image/*" hidden><span>${ed?.photo ? 'Gerätefoto ersetzen' : '+ Foto vom Gerät'}</span></label>
+    <div class="grid2">
+      <label class="f">Gewichtsart<select name="unit">${Object.entries(UNITS).map(([k, [l]]) => `<option value="${k}" ${u === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">Muskel<select name="muscle">${MUSCLES.map(m => `<option ${ed?.muscle === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      <label class="f">Wdh. von<input name="repMin" inputmode="numeric" value="${ed?.repMin ?? r0}"></label>
+      <label class="f">Wdh. bis<input name="repMax" inputmode="numeric" value="${ed?.repMax ?? r1}"></label>
+      <label class="f">Sätze<input name="sets" inputmode="numeric" value="${ed?.sets ?? 3}"></label>
+      <label class="f">Pause (Sekunden)<input name="rest" inputmode="numeric" value="${ed?.rest ?? 90}"></label>
+    </div>
+    <label class="f">Gewichtssprung<input name="step" inputmode="decimal" value="${ed?.step != null ? fmt(ed.step, 2) : ''}" placeholder="automatisch (kg 2,5 · Stufe 1)"></label>
+    <p class="small muted">Gewichtssprung: um wie viel du mindestens erhöhen kannst. Steckgewichte in 5-kg-Schritten → 5, Kurzhanteln 10/12/14 → 2, Stufen → 1.</p>
+    <label class="f">Einstellung am Gerät / Notiz<input name="note" value="${h(ed?.note)}" placeholder="z. B. Sitz Stufe 4, Polster oben"></label>
+    <button>${ed ? 'Änderungen speichern' : 'Übung anlegen'}</button></form>`;
+}
 TRAIN.plaene = () => {
   const ts = all('templates').sort((a, b) => a.order - b.order);
   const exs = all('exercises').sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  return `
-  <div class="card"><p class="small muted">Jeder Plan ist eine Vorlage. Eure Oberkörpertage dürfen unterschiedlich sein: Lege dafür zwei Pläne an (A und B). Weicht ein einzelnes Training ab, änderst du es direkt im laufenden Training. Für spontane Einheiten gibt es „Freies Training" in der Tagesansicht.</p></div>
-  ${ts.map(t => `<div class="card">
+  const imp = !kv('import.last1', false) ? `<div class="card hero"><h2>Dein letztes Training übernehmen</h2>
+    <p class="small">${LAST_TRAINING.map(x => x[0]).join(', ')}. Legt die Übungen samt Gewichtsart an, fügt sie einem Plan hinzu und speichert das Training mit deinen Werten. Danach schlägt dir die App beim nächsten Mal direkt die Steigerung vor.</p>
+    <form data-form="importLast" class="stack"><div class="grid2">
+      <label class="f">Datum des Trainings<input type="date" name="date" value="${addDays(today(), -1)}" max="${today()}"></label>
+      <label class="f">In welchen Plan?<select name="plan">${ts.map(t => `<option value="${t.id}" ${/oberk.*a/i.test(t.name) ? 'selected' : ''}>${h(t.name)}</option>`).join('')}<option value="new">Neuer Plan „Oberkörper"</option></select></label></div>
+      <div class="row"><button class="grow">Übernehmen</button><button type="button" class="sec" data-act="kv" data-k="import.last1" data-v="1">Nicht nötig</button></div></form></div>` : '';
+  return `${imp}
+  <div class="card"><p class="small muted">Jeder Plan hat zwei Phasen: <b>Aufwärmen</b> (zum Abhaken) und <b>Training</b> (Übungen mit Gewicht). Neue Geräte legst du direkt hier im Plan an: Name, Foto, fertig. Details wie Wiederholungen und Pause kannst du später auf der Übungsseite ändern.</p></div>
+  ${ts.map(t => `<div class="card plan">
     <div class="row"><input value="${h(t.name)}" data-tname="${t.id}" aria-label="Name des Plans" class="strong"><button class="icon" data-act="delTemplate" data-id="${t.id}" aria-label="Plan löschen">×</button></div>
-    <div class="list">${t.items.map((id, i) => `<div class="item"><span class="small muted num">${i + 1}</span><span class="grow">${h(exName(id))}</span><button class="icon" data-act="moveItem" data-id="${t.id}" data-i="${i}" data-dir="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon" data-act="moveItem" data-id="${t.id}" data-i="${i}" data-dir="1" aria-label="Nach unten" ${i === t.items.length - 1 ? 'disabled' : ''}>↓</button><button class="icon" data-act="removeItem" data-id="${t.id}" data-i="${i}" aria-label="Entfernen">×</button></div>`).join('') || '<p class="empty">Noch leer.</p>'}</div>
-    ${exs.length ? `<select data-addto="${t.id}" aria-label="Übung hinzufügen"><option value="">+ Übung hinzufügen</option>${exs.filter(x => !t.items.includes(x.id)).map(x => `<option value="${x.id}">${h(x.name)} (${h(x.muscle)})</option>`).join('')}</select>` : '<p class="small muted">Lege zuerst unter „Übungen" welche an.</p>'}
+    <p class="label">1 · Aufwärmen</p>
+    <div class="list">${(t.warmup || []).map((w, i) => `<div class="item"><span class="grow"><b>${h(w.name)}</b> <span class="small muted">${w.sets}×${w.detail ? ' ' + h(w.detail) : ''}</span></span>
+      <button class="icon" data-act="moveWarm" data-id="${t.id}" data-i="${i}" data-dir="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button><button class="icon" data-act="delWarm" data-id="${t.id}" data-i="${i}" aria-label="Entfernen">×</button></div>`).join('') || '<p class="small muted">Noch kein Aufwärmen.</p>'}</div>
+    <form data-form="warmup" class="warmform"><input type="hidden" name="plan" value="${t.id}">
+      <input name="name" list="warmsuggest" required placeholder="z. B. Ergometer" aria-label="Aufwärmübung">
+      <input name="sets" inputmode="numeric" value="1" aria-label="Sätze">
+      <input name="detail" placeholder="5 min / 15 Wdh." aria-label="Dauer oder Wiederholungen">
+      <button>+</button></form>
+    <datalist id="warmsuggest">${WARM_SUGGEST.map(x => `<option value="${h(x)}">`).join('')}</datalist>
+    <p class="label">2 · Training</p>
+    <div class="list">${t.items.map((id, i) => { const ex = S.exercises.get(id), ph = exPhoto(ex); return `<div class="item">${ph ? `<img class="mini" src="${ph}" alt="">` : `<span class="mini ph">${i + 1}</span>`}
+      <a class="grow navitem" href="#uebung/${id}"><b>${h(exName(id))}</b><p class="small muted">${ex ? `${ex.sets}×${ex.repMin}–${ex.repMax} · ${UNITS[exUnit(ex)][0]}` : ''}</p></a>
+      <button class="icon" data-act="moveItem" data-id="${t.id}" data-i="${i}" data-dir="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="icon" data-act="removeItem" data-id="${t.id}" data-i="${i}" aria-label="Aus Plan entfernen">×</button></div>`; }).join('') || '<p class="small muted">Noch keine Übungen.</p>'}</div>
+    ${exs.filter(x => !t.items.includes(x.id)).length ? `<select data-addto="${t.id}" aria-label="Vorhandene Übung hinzufügen"><option value="">+ Vorhandene Übung hinzufügen</option>${exs.filter(x => !t.items.includes(x.id)).map(x => `<option value="${x.id}">${h(x.name)}</option>`).join('')}</select>` : ''}
+    <details><summary class="small link">+ Neues Gerät / neue Übung anlegen</summary>${quickExForm('plan:' + t.id, false)}</details>
   </div>`).join('')}
-  <div class="card"><form data-form="template" class="row"><input name="name" placeholder="Neuer Plan, z. B. Oberkörper C" required><button>Anlegen</button></form></div>`;
+  <div class="card"><form data-form="template" class="row"><input name="name" placeholder="Neuer Plan, z. B. Oberkörper B" required><button>Anlegen</button></form></div>`;
+};
+TRAIN.uebungen = () => {
+  const exs = all('exercises').sort((a, b) => MUSCLES.indexOf(a.muscle) - MUSCLES.indexOf(b.muscle) || a.name.localeCompare(b.name, 'de'));
+  let lastMuscle = null;
+  return `<div class="card"><h2>Neue Übung</h2><p class="small muted">Gerät und Übung sind eins: Gib ihr einen Namen, den ihr benutzt, und fotografiere das Gerät, damit du es wiedererkennst.</p>${exerciseForm(null)}</div>
+  <div class="card"><h2>Deine Übungen (${exs.length})</h2><div class="list">${exs.map(x => {
+    const hst = exHistory(x.id), ph = exPhoto(x), head = x.muscle !== lastMuscle ? `<p class="label" style="padding-top:10px">${h(x.muscle || 'Ohne Muskel')}</p>` : '';
+    lastMuscle = x.muscle;
+    return `${head}<a class="item navitem" href="#uebung/${x.id}">${ph ? `<img class="mini" src="${ph}" alt="">` : '<span class="mini ph">?</span>'}<div class="grow"><b>${h(x.name)}</b><p class="small muted">${UNITS[exUnit(x)][0]} · ${x.sets}×${x.repMin}–${x.repMax}${hst.length ? ` · zuletzt ${fmtTop(x, topLoad(x, hst[hst.length - 1].sets))}` : ''}</p></div>›</a>`;
+  }).join('') || '<p class="empty">Noch keine Übungen.</p>'}</div></div>`;
 };
 TRAIN.verlauf = () => {
   const ws = all('workouts').sort(wSort);
   return `<div class="card"><h2>Trainings (${ws.length})</h2>
-  <div class="list">${ws.map(w => `<details class="item block"><summary class="row between"><span><b>${h(w.name)}</b> <span class="small muted">${wday(w.date)}, ${dlong(w.date)}</span></span><span class="small muted num">${workoutSets(w)} Sätze · ${fmt(workoutVol(w) / 1000, 1)} t</span></summary>
-      <div class="list small">${w.entries.filter(e => e.sets.some(s => s.done)).map(e => `<div class="item"><span class="grow">${h(exName(e.exerciseId))}</span><span class="num muted">${e.sets.filter(s => s.done).map(s => `${fmt(num(s.kg) || 0)}×${s.reps}`).join(' · ')}</span></div>`).join('')}</div>
+  <div class="list">${ws.map(w => `<details class="item block"><summary class="row between"><span><b>${h(w.name)}</b> <span class="small muted">${wday(w.date)}, ${dlong(w.date)}</span></span><span class="small muted num">${workoutSets(w)} Sätze</span></summary>
+      <div class="list small">${w.entries.filter(e => e.sets.some(s => s.done)).map(e => { const ex = S.exercises.get(e.exerciseId); return `<div class="item"><span class="grow">${h(exName(e.exerciseId))}</span><span class="num muted">${e.sets.filter(s => s.done).map(s => fmtSet(s, ex)).join(' · ')}</span></div>`; }).join('')}</div>
       <button class="danger" data-act="delWorkout" data-id="${w.id}">Training löschen</button></details>`).join('') || '<p class="empty">Noch kein Training gespeichert.</p>'}</div></div>`;
 };
+/* Übungsseite: Foto, Fortschritt, Verlauf, Einstellungen */
+VIEWS.uebung = id => {
+  const ex = S.exercises.get(id);
+  if (!ex) return `${back('#setup/training/uebungen', 'Übungen')}<div class="card"><p class="empty">Übung nicht gefunden.</p></div>`;
+  const hst = exHistory(id), ph = exPhoto(ex), u = exUnit(ex);
+  const tops = hst.map(x => ({ d: x.date, y: topLoad(ex, x.sets) }));
+  const first = tops[0], last = tops[tops.length - 1], best = tops.length ? Math.max(...tops.map(p => p.y)) : null;
+  const sg = suggest(ex);
+  return `${back('#setup/training/uebungen', 'Übungen')}
+  <div class="card">
+    ${ph ? `<button class="exbig" data-act="zoomEx" data-id="${ex.id}"><img src="${ph}" alt="Gerät ${h(ex.name)}"></button>` : ''}
+    <h2>${h(ex.name)}</h2><p class="small muted">${h(ex.muscle || '')} · ${UNITS[u][0]} · ${ex.sets}×${ex.repMin}–${ex.repMax} · Pause ${ex.rest || 90} s${ex.note ? ' · ' + h(ex.note) : ''}</p>
+    <label class="btn sec" for="exPhotoIn" data-exid="${ex.id}">${ph ? 'Foto ersetzen' : '+ Foto vom Gerät'}</label><input type="file" id="exPhotoIn" accept="image/*" hidden>
+  </div>
+  <div class="card"><h2>Fortschritt</h2>
+    ${tops.length ? `<div class="grid2"><div><p class="small muted">Erstes Training</p><b class="num">${fmtTop(ex, first.y)}</b></div><div><p class="small muted">Zuletzt</p><b class="num">${fmtTop(ex, last.y)}</b></div>
+      <div><p class="small muted">Bestwert</p><b class="num">${fmtTop(ex, best)}</b></div><div><p class="small muted">Steigerung</p><b class="num">${sign(last.y - first.y)}${fmt(last.y - first.y, 2)} ${unitShort(ex) || 'Wdh.'}</b></div></div>
+      ${chart([{ pts: tops, cls: 'line' }], { label: 'Höchstes Gewicht pro Training', h: 150, empty: 'Ab zwei Trainings siehst du hier die Kurve.' })}` : '<p class="empty">Noch nicht trainiert.</p>'}
+    <p class="hint">${h(sg.text)}</p>
+  </div>
+  ${hst.length ? `<div class="card"><h2>Verlauf</h2><div class="list">${hst.slice().reverse().map(x => `<div class="item"><span class="small muted num" style="min-width:74px">${dlong(x.date)}</span><span class="grow num small">${x.sets.map(s => fmtSet(s, ex)).join(' · ')}</span></div>`).join('')}</div></div>` : ''}
+  <details class="card"><summary><b>Einstellungen bearbeiten</b></summary>${exerciseForm(ex)}</details>
+  <div class="card"><button class="danger" data-act="delExercise" data-id="${ex.id}">Übung löschen</button><p class="small muted">Gespeicherte Trainings bleiben erhalten.</p></div>`;
+};
+function strengthCard() {
+  const rows = all('exercises').map(ex => ({ ex, hst: exHistory(ex.id) })).filter(x => x.hst.length).sort((a, b) => a.ex.name.localeCompare(b.ex.name, 'de'));
+  if (!rows.length) return '<div class="card"><h2>Kraft je Übung</h2><p class="empty">Nach dem ersten Training siehst du hier für jede Übung, wie sich dein Gewicht steigert.</p></div>';
+  return `<div class="card"><h2>Kraft je Übung</h2><p class="small muted">Höchstes Gewicht pro Training, ohne Gewicht die meisten Wiederholungen. Antippen für alle Details.</p>
+    <div class="kgrid">${rows.map(({ ex, hst }) => {
+      const f = topLoad(ex, hst[0].sets), l = topLoad(ex, hst[hst.length - 1].sets), dl = l - f;
+      return `<a class="kraft" href="#uebung/${ex.id}"><div class="row between"><b>${h(ex.name)}</b><span class="chip ${dl > 0 ? 'c-go' : 'c-acc'}">${dl === 0 ? 'gleich' : `${dl > 0 ? '+' : ''}${fmt(dl, 2)} ${unitShort(ex) || 'Wdh.'}`}</span></div>
+        <p class="small muted">${fmtTop(ex, f)} → ${fmtTop(ex, l)} · ${hst.length} Training${hst.length > 1 ? 's' : ''}</p>
+        ${hst.length > 1 ? chart([{ pts: hst.map(x => ({ d: x.date, y: topLoad(ex, x.sets) })), cls: 'line' }], { h: 90, label: ex.name, minPad: 1 }) : ''}</a>`;
+    }).join('')}</div></div>`;
+}
 SETUP.ernaehrung = () => {
   const dc = dietCfg(), dp = dietPlan(), t = targets(), man = kv('targets.manual', {});
   return `${back('#setup', 'Einstellungen')}
@@ -942,15 +1129,15 @@ ACT.habit = async el => {
   log.done = { ...log.done, [el.dataset.id]: !log.done[el.dataset.id] };
   await put('habitLog', log); render();
 };
-ACT.edit = el => { editing[el.dataset.kind] = el.dataset.id; render(); scrollTo({ top: 0, behavior: 'smooth' }); };
-ACT.cancelEdit = el => { editing[el.dataset.kind] = null; render(); };
-ACT.delEquipment = async el => { const used = all('exercises').filter(x => x.equipmentId === el.dataset.id).length; if (!armed(el, used ? `${used} Üb.?` : '?')) return; await del('equipment', el.dataset.id); render(); };
 ACT.delExercise = async el => {
-  if (!armed(el, '?')) return;
+  if (!armed(el, 'Wirklich löschen?')) return;
   await del('exercises', el.dataset.id);
   for (const t of all('templates')) if (t.items.includes(el.dataset.id)) await put('templates', { ...t, items: t.items.filter(i => i !== el.dataset.id) });
-  render();
+  location.hash = '#setup/training/uebungen';
 };
+ACT.moveWarm = async el => { const t = S.templates.get(el.dataset.id), i = +el.dataset.i, j = i + +el.dataset.dir, w = [...t.warmup]; [w[i], w[j]] = [w[j], w[i]]; await put('templates', { ...t, warmup: w }); render(); };
+ACT.delWarm = async el => { const t = S.templates.get(el.dataset.id); await put('templates', { ...t, warmup: t.warmup.filter((_, i) => i !== +el.dataset.i) }); render(); };
+ACT.zoomEx = el => { const ex = S.exercises.get(el.dataset.id); if (ex?.photo) openImage(exPhoto(ex), ex.name); };
 ACT.delTemplate = async el => { if (!armed(el, '?')) return; await del('templates', el.dataset.id); render(); };
 ACT.moveItem = async el => { const t = S.templates.get(el.dataset.id), i = +el.dataset.i, j = i + +el.dataset.dir, items = [...t.items]; [items[i], items[j]] = [items[j], items[i]]; await put('templates', { ...t, items }); render(); };
 ACT.removeItem = async el => { const t = S.templates.get(el.dataset.id); await put('templates', { ...t, items: t.items.filter((_, i) => i !== +el.dataset.i) }); render(); };
@@ -963,31 +1150,70 @@ ACT.moveHabit = async el => {
   render();
 };
 ACT.startWorkout = async el => {
-  if (kv('draft', null)) { location.hash = '#training'; return; }
+  if (draft()) { location.hash = '#training'; return; }
+  unlockAudio();
   const t = S.templates.get(el.dataset.id);
   const entries = t.items.filter(id => S.exercises.has(id)).map(id => makeEntry(S.exercises.get(id)));
-  await setKv('draft', { id: uid(), date: cur, templateId: t.id, name: t.name, started: new Date().toISOString(), entries });
+  const warmup = (t.warmup || []).map(w => ({ name: w.name, detail: w.detail, done: Array(Math.max(1, +w.sets || 1)).fill(false) }));
+  await setKv('draft', { id: uid(), date: cur, templateId: t.id, name: t.name, started: new Date().toISOString(), warmup, phase: warmup.length ? 'warm' : 'main', idx: 0, entries });
   location.hash = '#training';
 };
 ACT.startFree = async () => {
-  if (kv('draft', null)) { location.hash = '#training'; return; }
-  await setKv('draft', { id: uid(), date: cur, templateId: null, name: 'Freies Training', started: new Date().toISOString(), entries: [] });
-  location.hash = '#training';
+  if (draft()) { location.hash = '#training'; return; }
+  unlockAudio();
+  await setKv('draft', { id: uid(), date: cur, templateId: null, name: 'Freies Training', started: new Date().toISOString(), warmup: [], phase: 'main', idx: 0, entries: [] });
+  location.hash = '#training/liste';
 };
-const draft = () => kv('draft', null);
-const saveDraft = d => setKv('draft', d);
-ACT.toggleSet = async el => { const d = draft(), s = d.entries[+el.dataset.e].sets[+el.dataset.s]; s.done = !s.done; await saveDraft(d); render(); };
-ACT.addSet = async el => { const d = draft(), e = d.entries[+el.dataset.e], l = e.sets[e.sets.length - 1] || { kg: '', reps: '' }; e.sets.push({ kg: l.kg, reps: l.reps, rir: '', done: false }); await saveDraft(d); render(); };
-ACT.removeSet = async el => { const d = draft(); d.entries[+el.dataset.e].sets.pop(); await saveDraft(d); render(); };
-ACT.removeEntry = async el => { if (!armed(el)) return; const d = draft(); d.entries.splice(+el.dataset.e, 1); await saveDraft(d); render(); };
+function curEntry(d) { return d.entries[curIdx(d)]; }
+async function setCur(f, value) { // Wert für den aktuellen und alle folgenden offenen Sätze übernehmen
+  const d = draft(), e = curEntry(d); if (!e) return;
+  const ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
+  for (let k = ci; k < e.sets.length; k++) if (!e.sets[k].done) e.sets[k][f] = value;
+  await saveDraft(d);
+}
+ACT.step = async el => {
+  const d = draft(), e = curEntry(d), ex = S.exercises.get(e.exerciseId) || {}, cs = e.sets.find(s => !s.done); if (!cs) return;
+  const f = el.dataset.f, st = f === 'kg' ? (incFor(ex) || 1) : 1;
+  const v = Math.max(0, Math.round(((num(cs[f]) || 0) + +el.dataset.d * st) * 100) / 100);
+  await setCur(f, String(v)); render();
+};
+ACT.rir = async el => { const d = draft(), cs = curEntry(d).sets.find(s => !s.done); cs.rir = cs.rir === el.dataset.v ? '' : el.dataset.v; await saveDraft(d); render(); };
+ACT.doneSet = async () => {
+  unlockAudio();
+  const d = draft(), i = curIdx(d), e = d.entries[i], ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
+  const ex = S.exercises.get(e.exerciseId);
+  if (exUnit(ex) !== 'none' && num(e.sets[ci].kg) == null) return toast(exUnit(ex) === 'stufe' ? 'Bitte die Stufe eintragen.' : 'Bitte das Gewicht eintragen.');
+  if (!num(e.sets[ci].reps)) return toast('Bitte die Wiederholungen eintragen.');
+  e.sets[ci].done = true;
+  let moved = false;
+  if (e.sets.every(s => s.done)) {
+    const nx = d.entries.findIndex((x, k) => k > i && x.sets.some(s => !s.done)), any = nx >= 0 ? nx : d.entries.findIndex(x => x.sets.some(s => !s.done));
+    if (any >= 0) { d.idx = any; moved = true; }
+  }
+  d.restUntil = d.entries.some(x => x.sets.some(s => !s.done)) ? Date.now() + (ex?.rest || 90) * 1000 : null;
+  await saveDraft(d); render();
+  if (moved) { scrollTo(0, 0); toast(`Nächste Übung: ${exName(d.entries[d.idx].exerciseId)}`); }
+};
+ACT.reopenSet = async el => { const d = draft(); curEntry(d).sets[+el.dataset.s].done = false; await saveDraft(d); render(); };
+ACT.addSet = async () => { const d = draft(), e = curEntry(d), l = e.sets[e.sets.length - 1] || { kg: '', reps: '' }; e.sets.push({ kg: l.kg, reps: l.reps, rir: '', done: false }); await saveDraft(d); render(); };
+ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); scrollTo(0, 0); };
+ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); location.hash = '#training'; };
+ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); location.hash = '#training'; };
+ACT.warmSet = async el => { const d = draft(), w = d.warmup[+el.dataset.w]; w.done[+el.dataset.s] = !w.done[+el.dataset.s]; await saveDraft(d); render(); };
+ACT.warmDone = async () => { const d = draft(); d.phase = 'main'; await saveDraft(d); render(); scrollTo(0, 0); };
+ACT.moveEntry = async el => { const d = draft(), i = +el.dataset.i, j = i + +el.dataset.dir; [d.entries[i], d.entries[j]] = [d.entries[j], d.entries[i]]; await saveDraft(d); render(); };
+ACT.removeEntry = async el => { if (!armed(el, '?')) return; const d = draft(); d.entries.splice(+el.dataset.i, 1); d.idx = clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1)); await saveDraft(d); render(); };
+ACT.restAdd = async () => { const d = draft(); d.restUntil = Math.max(d.restUntil || 0, Date.now()) + 30000; await saveDraft(d); render(); };
+ACT.restSkip = async () => { const d = draft(); d.restUntil = null; await saveDraft(d); render(); };
 ACT.finishWorkout = async el => {
   const d = draft(), done = d.entries.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
   if (!done && !armed(el, 'Keine Sätze abgehakt. Trotzdem speichern?')) return;
-  await put('workouts', { ...d, finished: new Date().toISOString() });
+  const { restUntil, idx, phase, ...rec } = d;
+  await put('workouts', { ...rec, finished: new Date().toISOString() });
   await del('kv', 'draft');
+  await setKv('lastSummary', d.id);
   cur = d.date;
-  toast(`Gespeichert: ${done} Sätze. Stark!`);
-  location.hash = '#tag';
+  location.hash = '#training/fertig';
 };
 ACT.discardWorkout = async el => { if (!armed(el, 'Wirklich verwerfen?')) return; await del('kv', 'draft'); location.hash = '#tag'; };
 ACT.backup = el => exportBackup(!!el.dataset.photos);
@@ -996,6 +1222,7 @@ ACT.restore = async el => {
   for (const s of Object.keys(STORES)) {
     if (!pendingImport.stores[s]) continue; // fehlt im Backup (z. B. Fotos) → unangetastet lassen
     let rows = pendingImport.stores[s];
+    if (s === 'exercises') rows = await Promise.all(rows.map(async r => r.photoData ? { ...r, photo: await (await fetch(r.photoData)).blob(), photoData: undefined } : r));
     if (s === 'photos') rows = await Promise.all(rows.map(async r => ({ ...r, blob: r.dataUrl ? await (await fetch(r.dataUrl)).blob() : r.blob, dataUrl: undefined })));
     const t = db.transaction(s, 'readwrite'), st = t.objectStore(s);
     st.clear(); for (const row of rows) st.put(row);
@@ -1067,19 +1294,62 @@ FORM.nutrition = async f => {
   if ([rec.kcal, rec.protein, rec.fat, rec.carbs].every(x => x == null)) { if (S.nutrition.has(cur)) await del('nutrition', cur); return toast('Eintrag geleert'); }
   await put('nutrition', rec); toast('Gespeichert');
 };
-FORM.equipment = async f => {
-  const id = editing.equipment || uid(), type = f.type.value, inc = num(f.inc.value);
-  await put('equipment', { id, name: f.name.value.trim(), type, inc: inc ?? EQ_TYPES[type][1], note: f.note.value.trim() });
-  editing.equipment = null; toast('Gerät gespeichert');
-};
-FORM.exercise = async f => {
-  const id = editing.exercise || uid();
-  let repMin = Math.round(num(f.repMin.value) || 8), repMax = Math.round(num(f.repMax.value) || 12);
+async function photoBlob(file) { const img = await loadImage(file); const blob = await resize(img, 1000, 'blob', 0.82); URL.revokeObjectURL(img.src); return blob; }
+async function saveExercise(base, f) {
+  const unit = f.unit?.value || base.unit || 'kg', [r0, r1] = DEF_REPS[unit];
+  let repMin = Math.round(num(f.repMin?.value) || base.repMin || r0), repMax = Math.round(num(f.repMax?.value) || base.repMax || r1);
   if (repMax < repMin) [repMin, repMax] = [repMax, repMin];
-  await put('exercises', { id, name: f.name.value.trim(), equipmentId: f.equipmentId.value || null, muscle: f.muscle.value, repMin, repMax, sets: clamp(Math.round(num(f.sets.value) || 3), 1, 10), inc: num(f.inc.value) });
-  editing.exercise = null; toast('Übung gespeichert');
+  const ex = {
+    ...base, name: f.name.value.trim(), unit, muscle: f.muscle?.value || base.muscle || '',
+    repMin, repMax, sets: clamp(Math.round(num(f.sets?.value) || base.sets || 3), 1, 10), rest: clamp(Math.round(num(f.rest?.value) || base.rest || 90), 15, 600),
+    step: f.step ? num(f.step.value) : base.step ?? null, note: f.note ? f.note.value.trim() : base.note || ''
+  };
+  if (f.step && num(f.step.value) == null) ex.step = UNITS[unit][1];
+  const file = f.photo?.files?.[0];
+  if (file) { try { ex.photo = await photoBlob(file); ex.photoAt = Date.now(); } catch (e) { toast(e.message); } }
+  await put('exercises', ex);
+  return ex;
+}
+FORM.exercise = async f => {
+  const old = S.exercises.get(f.id.value);
+  const ex = await saveExercise(old || { id: uid() }, f);
+  toast(old ? 'Gespeichert' : `${ex.name} angelegt`);
 };
-FORM.template = async f => { const order = Math.max(-1, ...all('templates').map(t => t.order)) + 1; await put('templates', { id: uid(), name: f.name.value.trim(), items: [], order }); };
+FORM.quickEx = async f => {
+  const name = f.name.value.trim(); if (!name) return;
+  const exist = all('exercises').find(x => x.name.toLowerCase() === name.toLowerCase());
+  const ex = exist || await saveExercise({ id: uid() }, f);
+  const target = f.target.value;
+  if (target === 'draft') {
+    const d = draft(); d.entries.push(makeEntry(ex)); d.idx = d.entries.length - 1; d.phase = 'main'; await saveDraft(d);
+    if (f.toPlan?.checked && d.templateId) { const t = S.templates.get(d.templateId); if (t && !t.items.includes(ex.id)) await put('templates', { ...t, items: [...t.items, ex.id] }); }
+    location.hash = '#training';
+  } else if (target.startsWith('plan:')) {
+    const t = S.templates.get(target.slice(5)); if (t && !t.items.includes(ex.id)) await put('templates', { ...t, items: [...t.items, ex.id] });
+  }
+  toast(exist ? `${ex.name} hinzugefügt` : `${ex.name} angelegt`);
+};
+FORM.warmup = async f => {
+  const t = S.templates.get(f.plan.value), name = f.name.value.trim(); if (!t || !name) return;
+  await put('templates', { ...t, warmup: [...(t.warmup || []), { name, sets: clamp(Math.round(num(f.sets.value) || 1), 1, 10), detail: f.detail.value.trim() }] });
+};
+FORM.importLast = async f => {
+  const date = f.date.value || addDays(today(), -1);
+  let t = S.templates.get(f.plan.value);
+  if (!t) { t = { id: uid(), name: 'Oberkörper', items: [], warmup: [], order: Math.max(-1, ...all('templates').map(x => x.order)) + 1 }; }
+  const entries = [], items = [...t.items];
+  for (const [name, muscle, unit, step, repMin, repMax, sets] of LAST_TRAINING) {
+    let ex = all('exercises').find(x => x.name.toLowerCase() === name.toLowerCase());
+    if (!ex) { ex = { id: uid(), name, muscle, unit, step, repMin, repMax, sets: 3, rest: unit === 'kg' && repMin <= 8 ? 120 : 90, note: '' }; await put('exercises', ex); }
+    if (!items.includes(ex.id)) items.push(ex.id);
+    entries.push({ exerciseId: ex.id, sets: sets.map(([kg, reps]) => ({ kg: unit === 'none' ? '' : String(kg), reps: String(reps), rir: '', done: true })) });
+  }
+  await put('templates', { ...t, items });
+  await put('workouts', { id: uid(), date, templateId: t.id, name: t.name, started: date + 'T18:00:00', finished: date + 'T19:00:00', warmup: [], entries });
+  await setKv('import.last1', true);
+  toast('Letztes Training übernommen');
+};
+FORM.template = async f => { const order = Math.max(-1, ...all('templates').map(t => t.order)) + 1; await put('templates', { id: uid(), name: f.name.value.trim(), items: [], warmup: [], order }); };
 FORM.habit = async f => { const order = Math.max(-1, ...all('habits').map(t => t.order)) + 1; await put('habits', { id: uid(), name: f.name.value.trim(), order, active: true }); };
 FORM.profile = async f => {
   const p = prof();
@@ -1097,6 +1367,7 @@ const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(
 async function exportBackup(withPhotos) {
   const data = { app: 'wandel', dbVersion: DB_VER, exported: new Date().toISOString(), stores: {} };
   for (const s of Object.keys(STORES)) if (s !== 'photos') data.stores[s] = all(s);
+  data.stores.exercises = await Promise.all(all('exercises').map(async e => { if (!(e.photo instanceof Blob)) return e; const { photo, ...rest } = e; return { ...rest, photoData: await blobToDataURL(photo) }; }));
   if (withPhotos) {
     toast('Fotos werden verpackt…');
     data.stores.photos = await Promise.all(all('photos').map(async p => { const { blob, ...rest } = p; return { ...rest, dataUrl: await blobToDataURL(blob) }; }));
@@ -1140,16 +1411,19 @@ function render() {
     });
   }
   if (tab === 'wissen' && sub === 'cheat') cheatCalc();
+  syncWakeLock();
 }
 window.addEventListener('hashchange', () => { closeViewer(); if (location.hash === '#beratung' && quiz.step >= QUIZ.length && !dietCfg()) quiz = { step: 0, a: {} }; render(); scrollTo(0, 0); });
+let pendingExPhoto = null;
 document.addEventListener('click', e => {
+  const px = e.target.closest('[data-exid]'); if (px) pendingExPhoto = px.dataset.exid;
   const el = e.target.closest('[data-act]');
   if (el && ACT[el.dataset.act]) { if (el.tagName !== 'A') e.preventDefault(); ACT[el.dataset.act](el, e); }
 });
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]'); if (!f) return;
   e.preventDefault();
-  await FORM[f.dataset.form](f.elements);
+  await FORM[f.dataset.form](f.elements, f);
   render();
 });
 document.addEventListener('input', e => {
@@ -1168,6 +1442,13 @@ document.addEventListener('change', async e => {
   else if (el.dataset.meals) { const dc = dietCfg() || { id: null, date: today(), addons: {} }; dc.meals = +el.value; await setKv('diet', dc); render(); }
   else if (el.dataset.dietsel && el.value) { await ACT.chooseDiet({ dataset: { id: el.value } }); }
   else if (el.id === 'importFile' && el.files[0]) readImport(el.files[0]);
+  else if (el.id === 'exPhotoIn' && el.files[0] && pendingExPhoto) {
+    const ex = S.exercises.get(pendingExPhoto);
+    if (ex) { try { await put('exercises', { ...ex, photo: await photoBlob(el.files[0]), photoAt: Date.now() }); toast('Gerätefoto gespeichert'); } catch (err) { toast(err.message); } }
+    el.value = ''; render();
+  }
+  else if (el.name === 'photo' && el.closest('.photoin')) { el.closest('.photoin').querySelector('span').textContent = el.files[0] ? 'Foto ausgewählt ✓' : '+ Foto'; }
+  else if (el.dataset.cur) { const v = num(el.value); await setCur(el.dataset.cur, v == null ? '' : String(v)); }
   else if (el.id === 'photoFile' && el.files.length) { await addPhotos([...el.files]); el.value = ''; }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
@@ -1175,6 +1456,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(
 // außer du bearbeitest gerade bewusst einen vergangenen Tag.
 let followToday = true;
 document.addEventListener('visibilitychange', () => {
+  syncWakeLock();
   if (!document.hidden && followToday && cur !== today()) { cur = today(); if (!document.querySelector('input:focus')) render(); }
 });
 
@@ -1184,7 +1466,7 @@ async function seed() {
   const habits = ['Eiweißziel erreicht', 'Kreatin genommen', 'Mindestens 7 Stunden geschlafen', '2–3 Liter Wasser', 'Bewegung im Alltag (Spaziergang, Treppe)'];
   for (let i = 0; i < habits.length; i++) await put('habits', { id: uid(), name: habits[i], order: i, active: true });
   const ts = ['Oberkörper A', 'Unterkörper', 'Oberkörper B'];
-  for (let i = 0; i < ts.length; i++) await put('templates', { id: uid(), name: ts[i], items: [], order: i });
+  for (let i = 0; i < ts.length; i++) await put('templates', { id: uid(), name: ts[i], items: [], warmup: [], order: i });
   await setKv('profile', { ...DEFAULT_PROFILE, startDate: today() });
   await setKv('seeded', true);
 }
@@ -1193,6 +1475,7 @@ async function seed() {
     db = await openDB();
     await loadAll();
     await seed();
+    await migrateV3();
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
     if (!location.hash || /^#(heute|koerper|essen|mehr)/.test(location.hash)) history.replaceState(null, '', '#tag');
     render();
