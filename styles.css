@@ -210,3 +210,5 @@ button.left{text-align:left}
 @media (min-width:640px){.kgrid{grid-template-columns:1fr 1fr}}
 .kraft{display:flex;flex-direction:column;gap:4px;background:var(--field);border-radius:12px;padding:12px;color:inherit;text-decoration:none;min-width:0}
 .card.plan > .label{margin-top:4px}
+.hint p{margin:0}
+.hint .ghost{padding:6px 0 0;display:block}
