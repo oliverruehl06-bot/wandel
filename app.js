@@ -288,7 +288,11 @@ const workoutSets = w => w.entries.reduce((a, e) => a + e.sets.filter(s => s.don
 const workoutVol = w => w.entries.reduce((a, e) => { const ex = S.exercises.get(e.exerciseId); if (exUnit(ex) !== 'kg') return a; return a + e.sets.filter(s => s.done).reduce((b, s) => b + (num(s.kg) || 0) * (num(s.reps) || 0), 0); }, 0);
 function makeEntry(ex) { // vorausgefüllt wie beim letzten Mal; ohne Verlauf mit dem Startvorschlag
   const lp = lastPerf(ex.id);
-  if (lp) return { exerciseId: ex.id, sets: lp.sets.map(s => ({ kg: s.kg ?? '', reps: String(s.reps ?? ''), rir: '', done: false })) };
+  if (lp) { // übersprungene Sätze vom letzten Mal mit den letzten Werten auf die geplante Satzzahl auffüllen
+    const sets = lp.sets.map(s => ({ kg: s.kg ?? '', reps: String(s.reps ?? ''), rir: '', done: false }));
+    while (sets.length < (+ex.sets || 3)) sets.push({ ...sets[sets.length - 1] });
+    return { exerciseId: ex.id, sets };
+  }
   const sg = suggest(ex);
   return { exerciseId: ex.id, sets: [...Array(+ex.sets || 3)].map(() => ({ kg: sg.kg === '' ? '' : String(sg.kg), reps: String(sg.reps), rir: '', done: false })) };
 }
@@ -517,6 +521,8 @@ VIEWS.tag = () => {
 const draft = () => kv('draft', null);
 const saveDraft = d => setKv('draft', d);
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, '0')}`;
+const isOpen = s => !s.done && !s.skipped; // Satz noch offen
+const isFinished = s => s.done || s.skipped;
 const curIdx = d => (Number.isInteger(d.idx) && d.idx >= 0 && d.idx < d.entries.length) ? d.idx : -1; // aufgeklappte Übung, -1 = keine
 const DEF_REPS = { kg: [8, 12], stufe: [10, 15], none: [12, 20] };
 const fmtTop = (ex, v) => v == null ? '–' : exUnit(ex) === 'none' ? `${fmt(v, 0)} Wdh.` : fmtLoad(v, ex);
@@ -525,7 +531,7 @@ VIEWS.training = sub => {
   if (sub === 'fertig') return trainingSummary();
   const d = draft();
   if (!d) return '<div class="card"><p class="empty">Kein laufendes Training.</p><a class="btn" href="#tag">Zum Tag</a></div>';
-  const tot = d.entries.reduce((a, e) => a + e.sets.length, 0), dn = d.entries.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
+  const tot = d.entries.reduce((a, e) => a + e.sets.length, 0), dn = d.entries.reduce((a, e) => a + e.sets.filter(isFinished).length, 0);
   const head = `<div class="thead"><div class="row between"><div class="grow"><b>${h(d.name)}</b><p class="small muted"><span id="elapsed">${mmss((Date.now() - new Date(d.started)) / 1000)}</span> · ${dn}/${tot} Sätze${d.date !== today() ? ` · für ${dlong(d.date)}` : ''}</p></div>
     ${sub === 'liste' ? '<a class="btn sec sm" href="#training">Zurück</a>' : '<a class="btn sec sm" href="#training/liste">Bearbeiten</a>'}</div>${bar(dn, tot || 1)}</div>`;
   const rest = d.restUntil && d.restUntil > Date.now() ? `<div class="restbar" id="restBar"><span>Pause</span><b id="restTime">${mmss((d.restUntil - Date.now()) / 1000)}</b><button class="sec sm" data-act="restAdd">+30 s</button><button class="sm" data-act="restSkip">Weiter</button></div>` : '';
@@ -541,7 +547,7 @@ function focusView(d) { // alle Übungen untereinander, eine davon aufgeklappt
   const warm = wt ? `<div class="card wcard"><div class="row between"><span class="label">Aufwärmen</span><span class="chip ${wd === wt ? 'c-go' : 'c-acc'}">${wd}/${wt}</span></div>
     ${d.warmup.map((w, wi) => `<div class="witem"><div class="grow"><b>${h(w.name)}</b>${w.detail ? ` <span class="small muted">${h(w.detail)}</span>` : ''}</div>
       <div class="row">${w.done.map((x, si) => `<button class="check big${x ? ' on' : ''}" data-act="warmSet" data-w="${wi}" data-s="${si}" aria-label="${h(w.name)} Satz ${si + 1}" aria-pressed="${x}"></button>`).join('')}</div></div>`).join('')}</div>` : '';
-  const allDone = d.entries.length && d.entries.every(e => e.sets.every(s => s.done));
+  const allDone = d.entries.length && d.entries.every(e => e.sets.every(isFinished));
   return `${warm}
   ${d.entries.length ? '' : '<div class="card"><p>Noch keine Übung in diesem Training.</p><a class="btn" href="#training/liste">Übung hinzufügen</a></div>'}
   ${d.entries.map((e, i) => i === oi ? openCard(d, e, i) : closedCard(e, i)).join('')}
@@ -549,8 +555,8 @@ function focusView(d) { // alle Übungen untereinander, eine davon aufgeklappt
   <button class="danger" data-act="discardWorkout">Training löschen</button>`;
 }
 function closedCard(e, i) {
-  const ex = S.exercises.get(e.exerciseId), ph = exPhoto(ex), n = e.sets.filter(s => s.done).length, done = n === e.sets.length;
-  const vals = (n ? e.sets.filter(s => s.done) : e.sets).map(s => fmtSet(s, ex)).join(' · ');
+  const ex = S.exercises.get(e.exerciseId), ph = exPhoto(ex), n = e.sets.filter(isFinished).length, done = n === e.sets.length;
+  const vals = (e.sets.some(s => s.done) ? e.sets.filter(s => s.done) : e.sets.filter(isOpen)).map(s => fmtSet(s, ex)).join(' · ');
   return `<button class="card excard${done ? ' isdone' : ''}" id="ex-${i}" data-act="openEx" data-i="${i}">
     ${ph ? `<img class="mini" src="${ph}" alt="">` : `<span class="mini ph">${done ? '✓' : i + 1}</span>`}
     <span class="grow left"><b>${h(exName(e.exerciseId))}</b><span class="small muted block">${n ? '' : 'Plan: '}${vals}</span></span>
@@ -558,7 +564,7 @@ function closedCard(e, i) {
 }
 function openCard(d, e, i) {
   const ex = S.exercises.get(e.exerciseId) || { id: '', name: 'Gelöschte Übung', unit: 'kg', repMin: 8, repMax: 12, sets: 3 };
-  const sg = ex.id ? suggest(ex, d.id) : null, ci = e.sets.findIndex(s => !s.done), cs = e.sets[ci], u = exUnit(ex), ph = exPhoto(ex);
+  const sg = ex.id ? suggest(ex, d.id) : null, ci = e.sets.findIndex(isOpen), cs = e.sets[ci], u = exUnit(ex), ph = exPhoto(ex);
   return `<div class="card focus" id="ex-${i}">
     <button class="exhead plain left" data-act="openEx" data-i="${i}" aria-label="${h(ex.name)} zuklappen">${ph ? `<span class="exphoto"><img src="${ph}" alt=""></span>` : ''}
       <span class="grow"><span class="exname block">${h(ex.name)}</span><span class="small muted block">${ex.repMin}–${ex.repMax} Wdh. · Pause ${ex.rest || 90} s${ex.note ? ' · ' + h(ex.note) : ''}</span></span><span class="muted">▴</span></button>
@@ -566,14 +572,17 @@ function openCard(d, e, i) {
     ${ph ? `<button class="ghost sm left" data-act="zoomEx" data-id="${ex.id}">Foto groß anzeigen</button>` : ''}
     ${sg?.last ? `<p class="small muted">${h(sg.last)}</p>` : ''}
     ${sg ? `<div class="hint${sg.up ? ' up' : ''}"><p>${h(sg.text)}</p>${cs && sg.kg !== '' && !sg.first && (num(cs.kg) !== num(sg.kg) || num(cs.reps) !== num(sg.reps)) ? '<button class="ghost sm" data-act="applySuggest">Vorschlag übernehmen</button>' : ''}</div>` : ''}
-    <div class="sets">${e.sets.map((s, si) => si === ci ? '' : s.done
+    <div class="sets">${e.sets.map((s, si) => si === ci ? '' : s.skipped
+      ? `<button class="setrow skipped" data-act="reopenSet" data-s="${si}" aria-label="Satz ${si + 1} doch machen"><span>Satz ${si + 1}</span><span>übersprungen</span><span>↺</span></button>`
+      : s.done
       ? `<button class="setrow done" data-act="reopenSet" data-s="${si}" aria-label="Satz ${si + 1} wieder öffnen"><span>Satz ${si + 1}</span><span class="num">${u === 'none' ? '' : fmtLoad(s.kg, ex) + ' × '}${s.reps} Wdh.</span><span>✓</span></button>`
       : `<div class="setrow"><span>Satz ${si + 1}</span><span class="num muted">${u === 'none' ? '' : fmtLoad(s.kg, ex) + ' × '}${s.reps || '–'} Wdh.</span><span></span></div>`).join('')}</div>
     ${cs ? `<div class="cur"><span class="label">Satz ${ci + 1} von ${e.sets.length}</span>
       ${u !== 'none' ? stepper('kg', cs.kg, u === 'stufe' ? 'Stufe' : 'kg') : ''}
       ${stepper('reps', cs.reps, 'Wdh.')}
       <div class="effort" role="group" aria-label="Wie schwer war der Satz? (optional)">${[['3', 'Locker'], ['2', 'Gut'], ['0', 'Am Limit']].map(([v, l]) => `<button class="${cs.rir === v ? 'on' : ''}" data-act="rir" data-v="${v}">${l}</button>`).join('')}</div>
-      <button class="bigbtn" data-act="doneSet">Satz geschafft ✓</button></div>` : '<p class="small muted">Alle Sätze erledigt. Tippe einen Satz an, um ihn zu korrigieren.</p>'}
+      <button class="bigbtn" data-act="doneSet">Satz geschafft ✓</button>
+      <button class="ghost sm" data-act="skipSet">Satz überspringen</button></div>` : '<p class="small muted">Alle Sätze erledigt. Tippe einen Satz an, um ihn zu korrigieren.</p>'}
     <div class="row between"><button class="ghost" data-act="addSet">+ Satz</button><button class="ghost" data-act="removeSet" ${e.sets.length <= 1 ? 'disabled' : ''}>− Satz</button><button class="ghost" data-act="openEx" data-i="${i}">Zuklappen</button></div>
   </div>`;
 }
@@ -582,7 +591,7 @@ function trainingList(d) {
   const wd = (d.warmup || []).reduce((a, w) => a + w.done.filter(Boolean).length, 0), wt = (d.warmup || []).reduce((a, w) => a + w.done.length, 0);
   return `<div class="card"><div class="list">
     ${wt ? `<button class="item navitem plain" data-act="goWarm"><span class="chip ${wd === wt ? 'c-go' : 'c-acc'}">${wd}/${wt}</span><span class="grow">Aufwärmen</span>›</button>` : ''}
-    ${d.entries.map((e, i) => { const n = e.sets.filter(s => s.done).length; return `<div class="item"><span class="chip ${n === e.sets.length ? 'c-go' : n ? 'c-warn' : 'c-acc'}">${n}/${e.sets.length}</span>
+    ${d.entries.map((e, i) => { const n = e.sets.filter(isFinished).length; return `<div class="item"><span class="chip ${n === e.sets.length ? 'c-go' : n ? 'c-warn' : 'c-acc'}">${n}/${e.sets.length}</span>
       <button class="grow plain left" data-act="jumpTo" data-i="${i}">${h(exName(e.exerciseId))}</button>
       <button class="icon" data-act="moveEntry" data-i="${i}" data-dir="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button class="icon" data-act="removeEntry" data-i="${i}" aria-label="Übung entfernen">×</button></div>`; }).join('')}
@@ -1218,37 +1227,46 @@ ACT.startFree = async () => {
 function curEntry(d) { return d.entries[curIdx(d)] || null; }
 async function setCur(f, value) { // Wert für den aktuellen und alle folgenden offenen Sätze übernehmen
   const d = draft(), e = curEntry(d); if (!e) return;
-  const ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
-  for (let k = ci; k < e.sets.length; k++) if (!e.sets[k].done) e.sets[k][f] = value;
+  const ci = e.sets.findIndex(isOpen); if (ci < 0) return;
+  for (let k = ci; k < e.sets.length; k++) if (isOpen(e.sets[k])) e.sets[k][f] = value;
   await saveDraft(d);
 }
 ACT.step = async el => {
-  const d = draft(), e = curEntry(d), ex = S.exercises.get(e.exerciseId) || {}, cs = e.sets.find(s => !s.done); if (!cs) return;
+  const d = draft(), e = curEntry(d), ex = S.exercises.get(e.exerciseId) || {}, cs = e.sets.find(isOpen); if (!cs) return;
   const f = el.dataset.f, st = f === 'kg' ? (incFor(ex) || 1) : 1;
   const v = Math.max(0, Math.round(((num(cs[f]) || 0) + +el.dataset.d * st) * 100) / 100);
   await setCur(f, String(v)); render();
 };
-ACT.rir = async el => { const d = draft(), cs = curEntry(d).sets.find(s => !s.done); cs.rir = cs.rir === el.dataset.v ? '' : el.dataset.v; await saveDraft(d); render(); };
+ACT.rir = async el => { const d = draft(), cs = curEntry(d)?.sets.find(isOpen); if (!cs) return; cs.rir = cs.rir === el.dataset.v ? '' : el.dataset.v; await saveDraft(d); render(); };
 ACT.doneSet = async () => {
   unlockAudio();
-  const d = draft(), i = curIdx(d), e = d.entries[i]; if (!e) return; const ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
+  const d = draft(), i = curIdx(d), e = d.entries[i]; if (!e) return; const ci = e.sets.findIndex(isOpen); if (ci < 0) return;
   const ex = S.exercises.get(e.exerciseId);
   if (exUnit(ex) !== 'none' && num(e.sets[ci].kg) == null) return toast(exUnit(ex) === 'stufe' ? 'Bitte die Stufe eintragen.' : 'Bitte das Gewicht eintragen.');
   if (!num(e.sets[ci].reps)) return toast('Bitte die Wiederholungen eintragen.');
   e.sets[ci].done = true;
-  const finished = e.sets.every(s => s.done);
+  const finished = e.sets.every(isFinished);
   if (finished) d.idx = -1; // fertige Übung zuklappen, die nächste wählst du selbst
-  d.restUntil = d.entries.some(x => x.sets.some(s => !s.done)) ? Date.now() + (ex?.rest || 90) * 1000 : null;
+  d.restUntil = d.entries.some(x => x.sets.some(isOpen)) ? Date.now() + (ex?.rest || 90) * 1000 : null;
   await saveDraft(d); render();
   if (finished) toast(`${exName(e.exerciseId)} fertig ✓`);
+};
+ACT.skipSet = async () => {
+  const d = draft(), e = curEntry(d); if (!e) return;
+  const ci = e.sets.findIndex(isOpen); if (ci < 0) return;
+  e.sets[ci].skipped = true;
+  const finished = e.sets.every(isFinished);
+  if (finished) d.idx = -1;
+  await saveDraft(d); render();
+  toast(finished ? `${exName(e.exerciseId)} abgeschlossen` : 'Satz übersprungen');
 };
 ACT.applySuggest = async () => {
   const d = draft(), e = curEntry(d); if (!e) return; const ex = S.exercises.get(e.exerciseId); if (!ex) return;
   const sg = suggest(ex, d.id);
-  for (const st of e.sets) if (!st.done) { if (sg.kg !== '') st.kg = String(sg.kg); st.reps = String(sg.reps); }
+  for (const st of e.sets) if (isOpen(st)) { if (sg.kg !== '') st.kg = String(sg.kg); st.reps = String(sg.reps); }
   await saveDraft(d); render(); toast('Vorschlag übernommen');
 };
-ACT.reopenSet = async el => { const d = draft(); if (!curEntry(d)) return; curEntry(d).sets[+el.dataset.s].done = false; await saveDraft(d); render(); };
+ACT.reopenSet = async el => { const d = draft(); if (!curEntry(d)) return; const st = curEntry(d).sets[+el.dataset.s]; st.done = false; st.skipped = false; await saveDraft(d); render(); };
 ACT.addSet = async () => { const d = draft(), e = curEntry(d); if (!e) return; const l = e.sets[e.sets.length - 1] || { kg: '', reps: '' }; e.sets.push({ kg: l.kg, reps: l.reps, rir: '', done: false }); await saveDraft(d); render(); };
 ACT.removeSet = async el => { // letzten Satz entfernen; ein bereits erledigter Satz braucht eine Bestätigung
   const d = draft(), e = curEntry(d); if (!e || e.sets.length <= 1) return;

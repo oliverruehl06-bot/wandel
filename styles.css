@@ -232,3 +232,4 @@ button.exhead{width:100%;color:var(--ink)}
 @keyframes cpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes cfade{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){.celebrate,.cbox,.cbox circle,.cbox path{animation:none;stroke-dashoffset:0}}
+.setrow.skipped{background:transparent;border:1px dashed var(--line);color:var(--muted)}
