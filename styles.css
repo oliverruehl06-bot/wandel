@@ -212,3 +212,8 @@ button.left{text-align:left}
 .card.plan > .label{margin-top:4px}
 .hint p{margin:0}
 .hint .ghost{padding:6px 0 0;display:block}
+.excard{flex-direction:row;align-items:center;gap:12px;text-align:left;color:var(--ink);font-weight:400;width:100%;padding:12px 14px}
+.excard.isdone{opacity:.7}
+.block{display:block}
+button.exhead{width:100%;color:var(--ink)}
+.wcard .witem:last-child{border-bottom:0}

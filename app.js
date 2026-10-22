@@ -516,7 +516,7 @@ VIEWS.tag = () => {
 const draft = () => kv('draft', null);
 const saveDraft = d => setKv('draft', d);
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.max(0, Math.floor(s % 60))).padStart(2, '0')}`;
-const curIdx = d => clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1));
+const curIdx = d => (Number.isInteger(d.idx) && d.idx >= 0 && d.idx < d.entries.length) ? d.idx : -1; // aufgeklappte Übung, -1 = keine
 const DEF_REPS = { kg: [8, 12], stufe: [10, 15], none: [12, 20] };
 const fmtTop = (ex, v) => v == null ? '–' : exUnit(ex) === 'none' ? `${fmt(v, 0)} Wdh.` : fmtLoad(v, ex);
 
@@ -526,7 +526,7 @@ VIEWS.training = sub => {
   if (!d) return '<div class="card"><p class="empty">Kein laufendes Training.</p><a class="btn" href="#tag">Zum Tag</a></div>';
   const tot = d.entries.reduce((a, e) => a + e.sets.length, 0), dn = d.entries.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
   const head = `<div class="thead"><div class="row between"><div class="grow"><b>${h(d.name)}</b><p class="small muted"><span id="elapsed">${mmss((Date.now() - new Date(d.started)) / 1000)}</span> · ${dn}/${tot} Sätze${d.date !== today() ? ` · für ${dlong(d.date)}` : ''}</p></div>
-    ${sub === 'liste' ? '<a class="btn sec sm" href="#training">Zurück zur Übung</a>' : '<a class="btn sec sm" href="#training/liste">Übersicht</a>'}</div>${bar(dn, tot || 1)}</div>`;
+    ${sub === 'liste' ? '<a class="btn sec sm" href="#training">Zurück</a>' : '<a class="btn sec sm" href="#training/liste">Bearbeiten</a>'}</div>${bar(dn, tot || 1)}</div>`;
   const rest = d.restUntil && d.restUntil > Date.now() ? `<div class="restbar" id="restBar"><span>Pause</span><b id="restTime">${mmss((d.restUntil - Date.now()) / 1000)}</b><button class="sec sm" data-act="restAdd">+30 s</button><button class="sm" data-act="restSkip">Weiter</button></div>` : '';
   return head + (sub === 'liste' ? trainingList(d) : focusView(d)) + rest + '<input type="file" id="exPhotoIn" accept="image/*" hidden>';
 };
@@ -535,23 +535,33 @@ function stepper(f, v, unit) {
     <label><input inputmode="decimal" data-cur="${f}" value="${v === '' || v == null ? '' : h(fmt(num(v), 2))}" placeholder="–" aria-label="${unit}"><span>${unit}</span></label>
     <button data-act="step" data-f="${f}" data-d="1" aria-label="${unit} mehr">+</button></div>`;
 }
-function focusView(d) {
-  if (d.phase === 'warm' && d.warmup?.length) {
-    return `<div class="card focus"><span class="label">Phase 1 · Aufwärmen</span>
-      ${d.warmup.map((w, wi) => `<div class="witem"><div class="grow"><b>${h(w.name)}</b>${w.detail ? `<p class="small muted">${h(w.detail)}</p>` : ''}</div>
-        <div class="row">${w.done.map((x, si) => `<button class="check big${x ? ' on' : ''}" data-act="warmSet" data-w="${wi}" data-s="${si}" aria-label="${h(w.name)} Satz ${si + 1}" aria-pressed="${x}"></button>`).join('')}</div></div>`).join('')}
-      <button class="bigbtn" data-act="warmDone">Weiter zum Training ›</button></div>`;
-  }
-  if (!d.entries.length) return '<div class="card"><p>Noch keine Übung in diesem Training.</p><a class="btn" href="#training/liste">Übung hinzufügen</a></div>';
-  if (d.entries.every(e => e.sets.every(s => s.done))) return `<div class="card focus hero"><h2>Alle Übungen geschafft</h2><p class="small">Stark. Schließe das Training ab, dann siehst du deine Bestwerte und den Vergleich zum letzten Mal.</p>
-    <button class="bigbtn" data-act="finishWorkout">Training abschließen</button><a class="btn sec" href="#training/liste">Noch etwas ergänzen</a></div>`;
-  const i = curIdx(d), e = d.entries[i], ex = S.exercises.get(e.exerciseId) || { id: '', name: 'Gelöschte Übung', unit: 'kg', repMin: 8, repMax: 12, sets: 3 };
+function focusView(d) { // alle Übungen untereinander, eine davon aufgeklappt
+  const oi = curIdx(d), wt = (d.warmup || []).reduce((a, w) => a + w.done.length, 0), wd = (d.warmup || []).reduce((a, w) => a + w.done.filter(Boolean).length, 0);
+  const warm = wt ? `<div class="card wcard"><div class="row between"><span class="label">Aufwärmen</span><span class="chip ${wd === wt ? 'c-go' : 'c-acc'}">${wd}/${wt}</span></div>
+    ${d.warmup.map((w, wi) => `<div class="witem"><div class="grow"><b>${h(w.name)}</b>${w.detail ? ` <span class="small muted">${h(w.detail)}</span>` : ''}</div>
+      <div class="row">${w.done.map((x, si) => `<button class="check big${x ? ' on' : ''}" data-act="warmSet" data-w="${wi}" data-s="${si}" aria-label="${h(w.name)} Satz ${si + 1}" aria-pressed="${x}"></button>`).join('')}</div></div>`).join('')}</div>` : '';
+  const allDone = d.entries.length && d.entries.every(e => e.sets.every(s => s.done));
+  return `${warm}
+  ${d.entries.length ? '' : '<div class="card"><p>Noch keine Übung in diesem Training.</p><a class="btn" href="#training/liste">Übung hinzufügen</a></div>'}
+  ${d.entries.map((e, i) => i === oi ? openCard(d, e, i) : closedCard(e, i)).join('')}
+  ${d.entries.length ? `<div class="row wrap"><a class="btn sec grow" href="#training/liste">+ Übung</a><button class="${allDone ? '' : 'sec '}grow" data-act="finishWorkout">Training abschließen</button></div>` : ''}`;
+}
+function closedCard(e, i) {
+  const ex = S.exercises.get(e.exerciseId), ph = exPhoto(ex), n = e.sets.filter(s => s.done).length, done = n === e.sets.length;
+  const vals = (n ? e.sets.filter(s => s.done) : e.sets).map(s => fmtSet(s, ex)).join(' · ');
+  return `<button class="card excard${done ? ' isdone' : ''}" id="ex-${i}" data-act="openEx" data-i="${i}">
+    ${ph ? `<img class="mini" src="${ph}" alt="">` : `<span class="mini ph">${done ? '✓' : i + 1}</span>`}
+    <span class="grow left"><b>${h(exName(e.exerciseId))}</b><span class="small muted block">${n ? '' : 'Plan: '}${vals}</span></span>
+    <span class="chip ${done ? 'c-go' : n ? 'c-warn' : 'c-acc'}">${done ? '✓' : `${n}/${e.sets.length}`}</span></button>`;
+}
+function openCard(d, e, i) {
+  const ex = S.exercises.get(e.exerciseId) || { id: '', name: 'Gelöschte Übung', unit: 'kg', repMin: 8, repMax: 12, sets: 3 };
   const sg = ex.id ? suggest(ex, d.id) : null, ci = e.sets.findIndex(s => !s.done), cs = e.sets[ci], u = exUnit(ex), ph = exPhoto(ex);
-  const next = d.entries.slice(i + 1).find(x => x.sets.some(s => !s.done));
-  return `<div class="card focus">
-    <div class="row between"><span class="label">Übung ${i + 1} von ${d.entries.length}</span><span class="small muted">${ex.repMin}–${ex.repMax} Wdh. · Pause ${ex.rest || 90} s</span></div>
-    <div class="exhead">${ph ? `<button class="exphoto" data-act="zoomEx" data-id="${ex.id}" aria-label="Foto vergrößern"><img src="${ph}" alt=""></button>` : ex.id ? `<label class="exphoto add" for="exPhotoIn" data-exid="${ex.id}">+ Foto<br>vom Gerät</label>` : ''}
-      <div class="grow"><h2 class="exname">${h(ex.name)}</h2>${ex.note ? `<p class="small muted">${h(ex.note)}</p>` : ''}</div></div>
+  return `<div class="card focus" id="ex-${i}">
+    <button class="exhead plain left" data-act="openEx" data-i="${i}" aria-label="${h(ex.name)} zuklappen">${ph ? `<span class="exphoto"><img src="${ph}" alt=""></span>` : ''}
+      <span class="grow"><span class="exname block">${h(ex.name)}</span><span class="small muted block">${ex.repMin}–${ex.repMax} Wdh. · Pause ${ex.rest || 90} s${ex.note ? ' · ' + h(ex.note) : ''}</span></span><span class="muted">▴</span></button>
+    ${!ph && ex.id ? `<label class="small link" for="exPhotoIn" data-exid="${ex.id}">+ Foto vom Gerät</label>` : ''}
+    ${ph ? `<button class="ghost sm left" data-act="zoomEx" data-id="${ex.id}">Foto groß anzeigen</button>` : ''}
     ${sg?.last ? `<p class="small muted">${h(sg.last)}</p>` : ''}
     ${sg ? `<div class="hint${sg.up ? ' up' : ''}"><p>${h(sg.text)}</p>${cs && sg.kg !== '' && !sg.first && (num(cs.kg) !== num(sg.kg) || num(cs.reps) !== num(sg.reps)) ? '<button class="ghost sm" data-act="applySuggest">Vorschlag übernehmen</button>' : ''}</div>` : ''}
     <div class="sets">${e.sets.map((s, si) => si === ci ? '' : s.done
@@ -561,10 +571,9 @@ function focusView(d) {
       ${u !== 'none' ? stepper('kg', cs.kg, u === 'stufe' ? 'Stufe' : 'kg') : ''}
       ${stepper('reps', cs.reps, 'Wdh.')}
       <div class="effort" role="group" aria-label="Wie schwer war der Satz? (optional)">${[['3', 'Locker'], ['2', 'Gut'], ['0', 'Am Limit']].map(([v, l]) => `<button class="${cs.rir === v ? 'on' : ''}" data-act="rir" data-v="${v}">${l}</button>`).join('')}</div>
-      <button class="bigbtn" data-act="doneSet">Satz geschafft ✓</button></div>` : ''}
-    <div class="row between"><button class="ghost" data-act="exNav" data-d="-1" ${i === 0 ? 'disabled' : ''}>‹ Zurück</button><button class="ghost" data-act="addSet">+ Satz</button><button class="ghost" data-act="exNav" data-d="1" ${i === d.entries.length - 1 ? 'disabled' : ''}>Weiter ›</button></div>
-  </div>
-  ${next ? `<p class="small muted center">Danach: ${h(exName(next.exerciseId))}</p>` : ''}`;
+      <button class="bigbtn" data-act="doneSet">Satz geschafft ✓</button></div>` : '<p class="small muted">Alle Sätze erledigt. Tippe einen Satz an, um ihn zu korrigieren.</p>'}
+    <div class="row between"><button class="ghost" data-act="addSet">+ Satz</button><button class="ghost" data-act="removeSet" ${e.sets.length <= 1 ? 'disabled' : ''}>− Satz</button><button class="ghost" data-act="openEx" data-i="${i}">Zuklappen</button></div>
+  </div>`;
 }
 function trainingList(d) {
   const exs = all('exercises').filter(x => !d.entries.some(e => e.exerciseId === x.id)).sort((a, b) => a.name.localeCompare(b.name, 'de'));
@@ -1167,7 +1176,7 @@ ACT.startFree = async () => {
   await setKv('draft', { id: uid(), date: cur, templateId: null, name: 'Freies Training', started: new Date().toISOString(), warmup: [], phase: 'main', idx: 0, entries: [] });
   location.hash = '#training/liste';
 };
-function curEntry(d) { return d.entries[curIdx(d)]; }
+function curEntry(d) { return d.entries[curIdx(d)] || null; }
 async function setCur(f, value) { // Wert für den aktuellen und alle folgenden offenen Sätze übernehmen
   const d = draft(), e = curEntry(d); if (!e) return;
   const ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
@@ -1183,28 +1192,34 @@ ACT.step = async el => {
 ACT.rir = async el => { const d = draft(), cs = curEntry(d).sets.find(s => !s.done); cs.rir = cs.rir === el.dataset.v ? '' : el.dataset.v; await saveDraft(d); render(); };
 ACT.doneSet = async () => {
   unlockAudio();
-  const d = draft(), i = curIdx(d), e = d.entries[i], ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
+  const d = draft(), i = curIdx(d), e = d.entries[i]; if (!e) return; const ci = e.sets.findIndex(s => !s.done); if (ci < 0) return;
   const ex = S.exercises.get(e.exerciseId);
   if (exUnit(ex) !== 'none' && num(e.sets[ci].kg) == null) return toast(exUnit(ex) === 'stufe' ? 'Bitte die Stufe eintragen.' : 'Bitte das Gewicht eintragen.');
   if (!num(e.sets[ci].reps)) return toast('Bitte die Wiederholungen eintragen.');
   e.sets[ci].done = true;
-  let moved = false;
-  if (e.sets.every(s => s.done)) {
-    const nx = d.entries.findIndex((x, k) => k > i && x.sets.some(s => !s.done)), any = nx >= 0 ? nx : d.entries.findIndex(x => x.sets.some(s => !s.done));
-    if (any >= 0) { d.idx = any; moved = true; }
-  }
+  const finished = e.sets.every(s => s.done);
+  if (finished) d.idx = -1; // fertige Übung zuklappen, die nächste wählst du selbst
   d.restUntil = d.entries.some(x => x.sets.some(s => !s.done)) ? Date.now() + (ex?.rest || 90) * 1000 : null;
   await saveDraft(d); render();
-  if (moved) { scrollTo(0, 0); toast(`Nächste Übung: ${exName(d.entries[d.idx].exerciseId)}`); }
+  if (finished) toast(`${exName(e.exerciseId)} fertig ✓`);
 };
 ACT.applySuggest = async () => {
-  const d = draft(), e = curEntry(d), ex = S.exercises.get(e.exerciseId); if (!ex) return;
+  const d = draft(), e = curEntry(d); if (!e) return; const ex = S.exercises.get(e.exerciseId); if (!ex) return;
   const sg = suggest(ex, d.id);
   for (const st of e.sets) if (!st.done) { if (sg.kg !== '') st.kg = String(sg.kg); st.reps = String(sg.reps); }
   await saveDraft(d); render(); toast('Vorschlag übernommen');
 };
-ACT.reopenSet = async el => { const d = draft(); curEntry(d).sets[+el.dataset.s].done = false; await saveDraft(d); render(); };
-ACT.addSet = async () => { const d = draft(), e = curEntry(d), l = e.sets[e.sets.length - 1] || { kg: '', reps: '' }; e.sets.push({ kg: l.kg, reps: l.reps, rir: '', done: false }); await saveDraft(d); render(); };
+ACT.reopenSet = async el => { const d = draft(); if (!curEntry(d)) return; curEntry(d).sets[+el.dataset.s].done = false; await saveDraft(d); render(); };
+ACT.addSet = async () => { const d = draft(), e = curEntry(d); if (!e) return; const l = e.sets[e.sets.length - 1] || { kg: '', reps: '' }; e.sets.push({ kg: l.kg, reps: l.reps, rir: '', done: false }); await saveDraft(d); render(); };
+ACT.removeSet = async el => { // letzten Satz entfernen; ein bereits erledigter Satz braucht eine Bestätigung
+  const d = draft(), e = curEntry(d); if (!e || e.sets.length <= 1) return;
+  if (e.sets[e.sets.length - 1].done && !armed(el, 'Erledigten Satz löschen?')) return;
+  e.sets.pop(); await saveDraft(d); render();
+};
+ACT.openEx = async el => {
+  const d = draft(), i = +el.dataset.i; d.idx = curIdx(d) === i ? -1 : i; await saveDraft(d); render();
+  if (d.idx >= 0) document.getElementById('ex-' + i)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+};
 ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); scrollTo(0, 0); };
 ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); location.hash = '#training'; };
 ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); location.hash = '#training'; };
