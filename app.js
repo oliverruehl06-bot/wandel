@@ -98,6 +98,9 @@ function slope(pts) { // pts: [{x,y}] → Steigung
   return sxx ? sxy / sxx : 0;
 }
 
+// Navigieren; ist das Ziel schon offen, wird neu gezeichnet (sonst passiert sichtbar nichts)
+function goTo(hash) { if (location.hash === hash) render(); else location.hash = hash; }
+
 let toastTimer;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
@@ -1243,7 +1246,7 @@ function armed(el, label = 'Sicher?') {
   setTimeout(() => { if (el.isConnected) { delete el.dataset.armed; el.textContent = old; } }, 3000);
   return false;
 }
-ACT.go = el => { location.hash = el.dataset.href; };
+ACT.go = el => { goTo(el.dataset.href); };
 ACT.kv = async el => { await setKv(el.dataset.k, el.dataset.num ? +el.dataset.v : el.dataset.v); render(); };
 ACT.day = el => { const n = addDays(cur, +el.dataset.n); if (n <= today()) { cur = n; followToday = n === today(); render(); } };
 ACT.dayToday = () => { cur = today(); followToday = true; render(); };
@@ -1262,7 +1265,7 @@ ACT.delExercise = async el => {
   if (!armed(el, 'Wirklich löschen?')) return;
   await del('exercises', el.dataset.id);
   for (const t of all('templates')) if (t.items.includes(el.dataset.id)) await put('templates', { ...t, items: t.items.filter(i => i !== el.dataset.id) });
-  location.hash = '#setup/training/uebungen';
+  goTo('#setup/training/uebungen');
 };
 ACT.moveWarm = async el => { const t = S.templates.get(el.dataset.id), i = +el.dataset.i, j = i + +el.dataset.dir, w = [...t.warmup]; [w[i], w[j]] = [w[j], w[i]]; await put('templates', { ...t, warmup: w }); render(); };
 ACT.delWarm = async el => { const t = S.templates.get(el.dataset.id); await put('templates', { ...t, warmup: t.warmup.filter((_, i) => i !== +el.dataset.i) }); render(); };
@@ -1279,19 +1282,19 @@ ACT.moveHabit = async el => {
   render();
 };
 ACT.startWorkout = async el => {
-  if (draft()) { location.hash = '#training'; return; }
+  if (draft()) { goTo('#training'); return; }
   unlockAudio();
   const t = S.templates.get(el.dataset.id);
   const entries = t.items.filter(id => S.exercises.has(id)).map(id => makeEntry(S.exercises.get(id)));
   const warmup = (t.warmup || []).map(w => ({ name: w.name, detail: w.detail, done: Array(Math.max(1, +w.sets || 1)).fill(false) }));
   await setKv('draft', { id: uid(), date: cur, templateId: t.id, name: t.name, started: new Date().toISOString(), warmup, phase: warmup.length ? 'warm' : 'main', idx: 0, entries });
-  location.hash = '#training';
+  goTo('#training');
 };
 ACT.startFree = async () => {
-  if (draft()) { location.hash = '#training'; return; }
+  if (draft()) { goTo('#training'); return; }
   unlockAudio();
   await setKv('draft', { id: uid(), date: cur, templateId: null, name: 'Freies Training', started: new Date().toISOString(), warmup: [], phase: 'main', idx: 0, entries: [] });
-  location.hash = '#training/liste';
+  goTo('#training/liste');
 };
 function curEntry(d) { return d.entries[curIdx(d)] || null; }
 async function setCur(f, value) { // Wert für den aktuellen und alle folgenden offenen Sätze übernehmen
@@ -1346,11 +1349,9 @@ ACT.openEx = async el => {
   const d = draft(), i = +el.dataset.i; d.idx = curIdx(d) === i ? -1 : i; await saveDraft(d); render();
   if (d.idx >= 0) document.getElementById('ex-' + i)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 };
-ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); $('#view').scrollTo(0, 0); };
-ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); location.hash = '#training'; };
-ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); location.hash = '#training'; };
+ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); goTo('#training'); };
+ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); goTo('#training'); };
 ACT.warmSet = async el => { popSel = `[data-act="warmSet"][data-w="${el.dataset.w}"][data-s="${el.dataset.s}"]`; const d = draft(), w = d.warmup[+el.dataset.w]; w.done[+el.dataset.s] = !w.done[+el.dataset.s]; await saveDraft(d); render(); };
-ACT.warmDone = async () => { const d = draft(); d.phase = 'main'; await saveDraft(d); render(); $('#view').scrollTo(0, 0); };
 ACT.moveEntry = async el => { const d = draft(), i = +el.dataset.i, j = i + +el.dataset.dir; [d.entries[i], d.entries[j]] = [d.entries[j], d.entries[i]]; await saveDraft(d); render(); };
 ACT.removeEntry = async el => { if (!armed(el, '?')) return; const d = draft(); d.entries.splice(+el.dataset.i, 1); d.idx = clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1)); await saveDraft(d); render(); };
 ACT.restAdd = async () => { const d = draft(); d.restUntil = Math.max(d.restUntil || 0, Date.now()) + 30000; await saveDraft(d); render(); };
@@ -1364,9 +1365,9 @@ ACT.finishWorkout = async el => {
   await setKv('lastSummary', d.id);
   cur = d.date;
   celebrateNext = !!done;
-  location.hash = '#training/fertig';
+  goTo('#training/fertig');
 };
-ACT.discardWorkout = async el => { if (!armed(el, 'Wirklich verwerfen?')) return; await del('kv', 'draft'); location.hash = '#tag'; };
+ACT.discardWorkout = async el => { if (!armed(el, 'Wirklich verwerfen?')) return; await del('kv', 'draft'); goTo('#tag'); };
 ACT.backup = el => exportBackup(!!el.dataset.photos);
 ACT.restore = async el => {
   if (!pendingImport || !armed(el, 'Wirklich alle Daten ersetzen?')) return;
@@ -1379,7 +1380,7 @@ ACT.restore = async el => {
     st.clear(); for (const row of rows) st.put(row);
     await txDone(t);
   }
-  pendingImport = null; photoURLs.clear(); await loadAll(); toast('Backup wiederhergestellt'); location.hash = '#tag';
+  pendingImport = null; photoURLs.clear(); await loadAll(); toast('Backup wiederhergestellt'); goTo('#tag');
 };
 ACT.openPhoto = el => openViewer(el.dataset.id);
 ACT.closePhoto = closeViewer;
@@ -1408,7 +1409,7 @@ ACT.quizAnswer = el => {
 };
 ACT.quizNext = () => { quiz.step++; render(); $('#view').scrollTo(0, 0); };
 ACT.quizBack = () => { quiz.step = Math.max(0, quiz.step - 1); render(); };
-ACT.quizRestart = () => { quiz = { step: 0, a: {} }; location.hash = '#beratung'; render(); };
+ACT.quizRestart = () => { quiz = { step: 0, a: {} }; goTo('#beratung'); };
 ACT.chooseDiet = async el => {
   const old = dietCfg() || {};
   const fromQuiz = el.dataset.tre != null;
@@ -1419,7 +1420,7 @@ ACT.chooseDiet = async el => {
     answers: fromQuiz ? quiz.a : (old.answers || null)
   });
   toast('Ernährungsplan gespeichert');
-  location.hash = '#wissen/plan';
+  goTo('#wissen/plan');
 };
 ACT.addon = async el => { const dc = dietCfg(); dc.addons = { ...dc.addons, [el.dataset.k]: !dc.addons?.[el.dataset.k] }; await setKv('diet', dc); render(); };
 
@@ -1474,7 +1475,7 @@ FORM.quickEx = async f => {
   if (target === 'draft') {
     const d = draft(); d.entries.push(makeEntry(ex)); d.idx = d.entries.length - 1; d.phase = 'main'; await saveDraft(d);
     if (f.toPlan?.checked && d.templateId) { const t = S.templates.get(d.templateId); if (t && !t.items.includes(ex.id)) await put('templates', { ...t, items: [...t.items, ex.id] }); }
-    location.hash = '#training';
+    goTo('#training');
   } else if (target.startsWith('plan:')) {
     const t = S.templates.get(target.slice(5)); if (t && !t.items.includes(ex.id)) await put('templates', { ...t, items: [...t.items, ex.id] });
   }

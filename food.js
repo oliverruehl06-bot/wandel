@@ -280,7 +280,7 @@ FORM.dish = async f => {
 ACT.addDish = async el => {
   const g = kv('dishes', []).find(x => x.id === el.dataset.id); if (!g) return;
   for (const it of g.items) await put('foodlog', { ...it, id: uid(), date: cur, meal: fs.meal, created: Date.now() });
-  toast(`${g.name} zu ${MEAL_NAME[fs.meal]} hinzugefügt`); location.hash = '#essen';
+  toast(`${g.name} zu ${MEAL_NAME[fs.meal]} hinzugefügt`); goTo('#essen');
 };
 ACT.dishDel = async el => { if (!armed(el, '?')) return; await setKv('dishes', kv('dishes', []).filter(x => x.id !== el.dataset.id)); render(); };
 ACT.ownNew = () => { fs.own = { returnTo: '#essen/add/' + fs.meal }; };
@@ -296,7 +296,7 @@ FORM.ownFood = async f => {
   await put('foods', food);
   const back = fs.own?.returnTo; fs.own = null;
   toast('Produkt gespeichert');
-  if (back) { location.hash = back; setTimeout(() => openAmount(food), 50); }
+  if (back) { goTo(back); setTimeout(() => openAmount(food), 50); }
 };
 
 /* ---------- Barcode ---------- */
@@ -366,7 +366,7 @@ async function handleCode(code) {
 }
 function ownFromCode(code, msg) {
   fs.own = { code, returnTo: '#essen/add/' + fs.meal };
-  location.hash = '#essen/eigene'; toast(msg);
+  goTo('#essen/eigene'); toast(msg);
 }
 
 /* ---------- Events ---------- */
