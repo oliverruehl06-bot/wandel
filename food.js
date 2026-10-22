@@ -195,15 +195,15 @@ ESSEN.statistik = () => {
     <div class="tile"><span>${icon('bread')}Ø KH</span><b>${ac != null ? fmt(ac, 0) + ' g' : '–'}</b><small>${t.carb[0]}–${t.carb[1]} g</small></div>
     <div class="tile"><span>${icon('target')}Eiweißziel</span><b>${rows.length ? `${protOk}/${rows.length}` : '–'}</b><small>Tage erreicht</small></div>
   </div>
-  <div class="card"><h2>Kalorien pro Tag</h2>${chart([{ pts: kPts, cls: 'dots' }, { pts: rolling(kPts), cls: 'trend' }], { goal: t.kcal, label: 'Kalorien', h: 150, minPad: 50, empty: 'Ab zwei erfassten Tagen erscheint hier der Verlauf.' })}
+  <div class="card">${hIc('flame', 'Kalorien pro Tag')}${chart([{ pts: kPts, cls: 'dots' }, { pts: rolling(kPts), cls: 'trend' }], { goal: t.kcal, label: 'Kalorien', h: 150, minPad: 50, empty: 'Ab zwei erfassten Tagen erscheint hier der Verlauf.' })}
     <p class="small muted">Punkte: Tage. Linie: 7-Tage-Schnitt. Gestrichelt: dein Ziel. Im Zielbereich (80–105 %) an ${inKcal} von ${rows.length} Tagen.</p></div>
-  <div class="card"><h2>Eiweiß pro Tag</h2>${chart([{ pts: pPts, cls: 'dots' }, { pts: rolling(pPts), cls: 'trend' }], { goal: t.pMin, label: 'Eiweiß', h: 130, minPad: 10, empty: 'Ab zwei erfassten Tagen erscheint hier der Verlauf.' })}</div>
-  ${mk ? `<div class="card"><h2>Makro-Verteilung</h2><div class="stack3"><i style="width:${(ap * 4 / mk * 100).toFixed(1)}%" class="mp"></i><i style="width:${(af * 9 / mk * 100).toFixed(1)}%" class="mf"></i><i style="width:${(ac * 4 / mk * 100).toFixed(1)}%" class="mc"></i></div>
+  <div class="card">${hIc('egg', 'Eiweiß pro Tag')}${chart([{ pts: pPts, cls: 'dots' }, { pts: rolling(pPts), cls: 'trend' }], { goal: t.pMin, label: 'Eiweiß', h: 130, minPad: 10, empty: 'Ab zwei erfassten Tagen erscheint hier der Verlauf.' })}</div>
+  ${mk ? `<div class="card">${hIc('chart', 'Makro-Verteilung')}<div class="stack3"><i style="width:${(ap * 4 / mk * 100).toFixed(1)}%" class="mp"></i><i style="width:${(af * 9 / mk * 100).toFixed(1)}%" class="mf"></i><i style="width:${(ac * 4 / mk * 100).toFixed(1)}%" class="mc"></i></div>
     <div class="legend row wrap"><span><i class="mp"></i>Eiweiß ${fmt(ap * 4 / mk * 100, 0)} %</span><span><i class="mf"></i>Fett ${fmt(af * 9 / mk * 100, 0)} %</span><span><i class="mc"></i>Kohlenhydrate ${fmt(ac * 4 / mk * 100, 0)} %</span></div>
     ${carbMax ? `<p class="small muted">Kohlenhydrate unter ${carbMax} g an ${carbOk} von ${rows.length} Tagen.</p>` : ''}</div>` : ''}
-  ${mealSum ? `<div class="card"><h2>Kalorien nach Mahlzeit</h2>${mealK.map(([l, k]) => `<div class="hrow"><span>${l}</span><b class="num">${fmt(k / mealSum * 100, 0)} %</b>${bar(k, mealSum)}</div>`).join('')}</div>` : ''}
-  ${topK.length ? `<div class="card"><h2>Größte Kalorienquellen</h2><div class="list">${topK.map(x => `<div class="item"><span class="grow">${h(x.name)} <span class="small muted">${x.n}×</span></span><b class="num">${fmt(x.kcal, 0)} kcal</b></div>`).join('')}</div></div>
-  <div class="card"><h2>Beste Eiweißquellen</h2><div class="list">${topP.map(x => `<div class="item"><span class="grow">${h(x.name)}</span><b class="num">${fmt(x.p, 0)} g</b></div>`).join('')}</div></div>` : ''}`;
+  ${mealSum ? `<div class="card">${hIc('clock', 'Kalorien nach Mahlzeit')}${mealK.map(([l, k]) => `<div class="hrow"><span>${l}</span><b class="num">${fmt(k / mealSum * 100, 0)} %</b>${bar(k, mealSum)}</div>`).join('')}</div>` : ''}
+  ${topK.length ? `<div class="card">${hIc('flame', 'Größte Kalorienquellen')}<div class="list">${topK.map(x => `<div class="item"><span class="grow">${h(x.name)} <span class="small muted">${x.n}×</span></span><b class="num">${fmt(x.kcal, 0)} kcal</b></div>`).join('')}</div></div>
+  <div class="card">${hIc('egg', 'Beste Eiweißquellen')}<div class="list">${topP.map(x => `<div class="item"><span class="grow">${h(x.name)}</span><b class="num">${fmt(x.p, 0)} g</b></div>`).join('')}</div></div>` : ''}`;
 };
 
 /* ---------- Mengen-Fenster ---------- */
@@ -284,7 +284,7 @@ ACT.addDish = async el => {
 };
 ACT.dishDel = async el => { if (!armed(el, '?')) return; await setKv('dishes', kv('dishes', []).filter(x => x.id !== el.dataset.id)); render(); };
 ACT.ownNew = () => { fs.own = { returnTo: '#essen/add/' + fs.meal }; };
-ACT.ownEdit = el => { fs.own = { ...S.foods.get(el.dataset.id) }; render(); scrollTo({ top: 0, behavior: 'smooth' }); };
+ACT.ownEdit = el => { fs.own = { ...S.foods.get(el.dataset.id) }; render(); $('#view').scrollTo({ top: 0, behavior: 'smooth' }); };
 ACT.ownCancel = () => { fs.own = null; render(); };
 ACT.ownDel = async el => { if (!armed(el, '?')) return; await del('foods', el.dataset.id); render(); };
 FORM.ownFood = async f => {

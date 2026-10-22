@@ -295,3 +295,25 @@ button.exhead{width:100%;color:var(--ink)}
 .warntxt{color:var(--warn)}
 @media (max-width:340px){.ring.lg{width:110px;height:110px}.ring.lg .rin b{font-size:1.4rem}}
 @media (prefers-reduced-motion:reduce){.ring .val{transition:none}}
+
+/* v11: App-Gerüst ohne fixierte Elemente. Kopf und untere Leiste sind feste Teile des Layouts,
+   nur der Inhalt scrollt. So kann die Leiste auf dem iPhone nicht mehr verrutschen. */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh;padding-bottom:0}
+.topbar{position:relative;top:auto;flex:none}
+main#view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;max-width:none;width:100%;margin:0;align-items:stretch}
+main#view > *{width:100%;max-width:720px;margin-inline:auto}
+.tabbar{position:relative;left:auto;right:auto;bottom:auto;flex:none}
+.thead{top:0}
+.restbar{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+#toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+
+/* Icons in Überschriften, Chips und Listen */
+.hic{display:flex;align-items:center;gap:8px}
+.hic .ic{color:var(--accent)}
+h3.hic .ic{width:18px;height:18px}
+.mchip{display:inline-flex;align-items:center;gap:5px}
+.mchip .ic{width:15px;height:15px}
+.legend .ic{width:15px;height:15px;color:var(--muted)}
+.rowic{display:flex;align-items:center;gap:8px}
+.rowic .ic{width:18px;height:18px;color:var(--accent)}

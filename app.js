@@ -474,6 +474,9 @@ const ICONS = {
 };
 const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[n] || ''}"/></svg>`;
 const cardHead = (ic, label, right = '') => `<div class="row between"><span class="chead">${icon(ic)}<span class="label">${label}</span></span>${right}</div>`;
+const METRIC_IC = { weight: 'scale', bmi: 'target', bf: 'drop', fatMass: 'drop', leanMass: 'dumbbell', kcal: 'flame', protein: 'egg', fat: 'drop', habits: 'check', goals: 'target', trainWeek: 'cal', volume: 'chart' };
+const metricIc = m => METRIC_IC[m.id] || (m.id.startsWith('m_') ? 'ruler' : m.id.startsWith('ex_') ? 'dumbbell' : 'chart');
+const hIc = (ic, t, tag = 'h2') => `<${tag} class="hic">${icon(ic)}<span>${t}</span></${tag}>`;
 function ring(v, goal, opts = {}) { // Kreis-Fortschritt; opts: color (CSS-Variable), ic, center, cls, warnOver
   const C = 2 * Math.PI * 42, pct = goal > 0 ? (v || 0) / goal : 0, over = opts.warnOver && pct > 1.05;
   return `<div class="ring ${opts.cls || ''}${over ? ' over' : ''}" style="--rc:var(${opts.color || '--accent'})"><svg viewBox="0 0 100 100" aria-hidden="true">
@@ -801,7 +804,7 @@ VIEWS.statistik = () => {
   </div>
 
   <div class="card">
-    <div class="row between"><h2>Prognose</h2></div>
+    <div class="row between">${hIc('flag', 'Prognose')}</div>
     <div class="seg">${[['plan', 'Nach Plan'], ['ist', 'Aktuelles Tempo']].map(([k, l]) => `<button class="${pmode === k ? 'on' : ''}" data-act="kv" data-k="stats.proj" data-v="${k}">${l}</button>`).join('')}</div>
     ${proj.reached ? '<p>Du hast dein Zielgewicht erreicht.</p>' : proj.noRate ? '<p class="small muted">Für eine Prognose nach aktuellem Tempo brauchst du mindestens eine Woche mit Gewichtsabnahme. „Nach Plan" funktioniert sofort.</p>' : `
       ${chart([{ pts: hist, cls: 'trend' }, { pts: proj.pts, cls: 'proj' }], { goal: p.goal, label: 'Prognose', h: 170 })}
@@ -812,36 +815,36 @@ VIEWS.statistik = () => {
   </div>
 
   <div class="card">
-    <h2>Vergleichen</h2>
+    ${hIc('chart', 'Vergleichen')}
     <div class="seg">${[[30, '30 T'], [90, '90 T'], [180, '6 M'], [0, 'Alles']].map(([v, l]) => `<button class="${range === v ? 'on' : ''}" data-act="kv" data-k="stats.range" data-v="${v}" data-num="1">${l}</button>`).join('')}</div>
     <div class="seg">${[['grid', 'Nebeneinander'], ['overlay', 'In einem Diagramm']].map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" data-act="kv" data-k="stats.mode" data-v="${k}">${l}</button>`).join('')}</div>
     <details ${chosen.length ? '' : 'open'}><summary class="small link">Metriken wählen (${chosen.length})</summary>
-      ${groups.map(g => `<p class="label" style="margin-top:10px">${g}</p><div class="chips">${defs.filter(m => m.g === g).map(m => `<button class="mchip${sel.includes(m.id) ? ' on' : ''}" data-act="metric" data-id="${m.id}">${h(m.name)}</button>`).join('')}</div>`).join('')}
+      ${groups.map(g => `<p class="label" style="margin-top:10px">${g}</p><div class="chips">${defs.filter(m => m.g === g).map(m => `<button class="mchip${sel.includes(m.id) ? ' on' : ''}" data-act="metric" data-id="${m.id}">${icon(metricIc(m))}${h(m.name)}</button>`).join('')}</div>`).join('')}
     </details>
   </div>
   ${mode === 'overlay' && chosen.length ? `<div class="card">${overlayChart(chosen.map(m => ({ pts: inR(m.pts) })))}
-    <div class="legend">${chosen.map((m, i) => { const ys = inR(m.pts).map(x => x.y); return `<span><i class="s${i % 6}"></i>${h(m.name)} <small class="muted">${ys.length ? `${fmt(Math.min(...ys), m.digits)}–${fmt(Math.max(...ys), m.digits)} ${m.unit}` : 'keine Daten'}</small></span>`; }).join('')}</div>
+    <div class="legend">${chosen.map((m, i) => { const ys = inR(m.pts).map(x => x.y); return `<span><i class="s${i % 6}"></i>${icon(metricIc(m))}${h(m.name)} <small class="muted">${ys.length ? `${fmt(Math.min(...ys), m.digits)}–${fmt(Math.max(...ys), m.digits)} ${m.unit}` : 'keine Daten'}</small></span>`; }).join('')}</div>
     <p class="small muted">Jede Linie ist auf ihren eigenen Wertebereich skaliert. So siehst du, ob sich Werte gemeinsam bewegen, zum Beispiel Bauchumfang und Eiweiß.</p></div>` : ''}
   ${mode === 'grid' ? `<div class="mgrid">${chosen.map(m => {
     const pts = inR(m.pts), dots = m.dots ? inR(m.dots) : null, last = pts[pts.length - 1], first = pts[0];
     const delta = last && first && pts.length > 1 ? last.y - first.y : null;
-    return `<div class="card mcard"><div class="row between"><h3>${h(m.name)}</h3><button class="icon" data-act="metric" data-id="${m.id}" aria-label="${h(m.name)} ausblenden">×</button></div>
+    return `<div class="card mcard"><div class="row between">${hIc(metricIc(m), h(m.name), 'h3')}<button class="icon" data-act="metric" data-id="${m.id}" aria-label="${h(m.name)} ausblenden">×</button></div>
       <p><b class="num">${last ? fmt(last.y, m.digits) : '–'}</b> <span class="small muted">${m.unit}${delta != null ? ` · ${sign(delta)}${fmt(delta, m.digits)} im Zeitraum` : ''}</span></p>
       ${chart([...(dots ? [{ pts: dots, cls: 'dots' }] : []), { pts, cls: m.line ? 'line' : 'trend' }], { goal: m.goal, label: m.name, h: 130, minPad: m.digits ? 0.5 : 1, zero: m.zero, empty: 'Noch zu wenig Daten im Zeitraum.' })}</div>`;
   }).join('')}</div>` : ''}
 
   ${strengthCard()}
   <div class="card">
-    <h2>Ziele in den letzten 30 Tagen</h2>
+    ${hIc('target', 'Ziele in den letzten 30 Tagen')}
     <div class="list">
-      <div class="item"><span class="grow">Eiweißziel erreicht</span><b class="num">${protOk}/${nut30.length} Tage</b></div>
-      <div class="item"><span class="grow">Kalorienziel eingehalten</span><b class="num">${kcalOk}/${nut30.length} Tage</b></div>
-      <div class="item"><span class="grow">Gewogen</span><b class="num">${last30.filter(x => S.weights.has(x)).length}/30 Tage</b></div>
-      <div class="item"><span class="grow">Wochen mit 3 Trainings</span><b class="num">${weeksAll.ok}/${weeksAll.n}</b></div>
+      <div class="item"><span class="grow rowic">${icon('egg')}Eiweißziel erreicht</span><b class="num">${protOk}/${nut30.length} Tage</b></div>
+      <div class="item"><span class="grow rowic">${icon('flame')}Kalorienziel eingehalten</span><b class="num">${kcalOk}/${nut30.length} Tage</b></div>
+      <div class="item"><span class="grow rowic">${icon('scale')}Gewogen</span><b class="num">${last30.filter(x => S.weights.has(x)).length}/30 Tage</b></div>
+      <div class="item"><span class="grow rowic">${icon('dumbbell')}Wochen mit 3 Trainings</span><b class="num">${weeksAll.ok}/${weeksAll.n}</b></div>
     </div>
   </div>
   <div class="card">
-    <h2>Gewohnheiten im Detail</h2>
+    ${hIc('check', 'Gewohnheiten im Detail')}
     <p class="small muted">Anteil der Tage, an denen du abgehakt hast (letzte 30 Tage mit Einträgen).</p>
     ${habits.map(x => { const ok = habitDays.filter(dd => S.habitLog.get(dd)?.done?.[x.id]).length, pc = habitDays.length ? ok / habitDays.length * 100 : 0; return `<div class="hrow"><span>${h(x.name)}</span><b class="num">${fmt(pc, 0)} %</b>${bar(pc, 100)}</div>`; }).join('') || '<p class="empty">Keine Gewohnheiten.</p>'}
   </div>`;
@@ -859,7 +862,7 @@ VIEWS.fotos = () => {
   const A = S.photos.get(compare.a), B = S.photos.get(compare.b);
   return `
   <div class="card">
-    <h2>Neue Fotos</h2>
+    ${hIc('camera', 'Neue Fotos')}
     <p class="small muted">Gleiches Licht, gleicher Ort, gleiche Uhrzeit (morgens), gleiche Kleidung. Am besten alle 2–4 Wochen vorne, seitlich und hinten.</p>
     <div class="grid2">
       <label class="f">Datum<input type="date" id="photoDate" value="${today()}" max="${today()}"></label>
@@ -870,7 +873,7 @@ VIEWS.fotos = () => {
     <p class="small muted">Fotos bleiben nur auf diesem Gerät. Für das Backup unter Einstellungen → Datensicherung „mit Fotos" wählen.</p>
   </div>
   ${ps.length >= 2 ? `<div class="card">
-    <h2>Vorher und nachher</h2>
+    ${hIc('camera', 'Vorher und nachher')}
     <div class="grid2">${['a', 'b'].map(k => `<label class="f">${k === 'a' ? 'Vorher' : 'Nachher'}<select data-compare="${k}"><option value="">wählen</option>${ps.map(p => `<option value="${p.id}" ${compare[k] === p.id ? 'selected' : ''}>${dlong(p.date)} · ${p.pose}</option>`).join('')}</select></label>`).join('')}</div>
     ${A && B ? `<div class="cmp">${[A, B].map(p => { const w = trendAt(p.date); return `<figure><img src="${photoURL(p)}" alt="${p.pose} am ${dlong(p.date)}"><figcaption>${dlong(p.date)}${w ? ` · ${fmtF(w)} kg` : ''}</figcaption></figure>`; }).join('')}</div>
       <p class="small muted">${(() => { const wa = trendAt(A.date), wb = trendAt(B.date), days = Math.abs(dayDiff(A.date, B.date)); return `${days} Tage dazwischen${wa && wb ? ` · ${sign(wb - wa)}${fmt(wb - wa)} kg` : ''}`; })()}</p>` : '<p class="small muted">Wähle zwei Fotos, um sie nebeneinander zu sehen.</p>'}
@@ -1149,20 +1152,20 @@ VIEWS.uebung = id => {
     <h2>${h(ex.name)}</h2><p class="small muted">${h(ex.muscle || '')} · ${UNITS[u][0]} · ${ex.sets}×${ex.repMin}–${ex.repMax} · Pause ${ex.rest || 90} s${ex.note ? ' · ' + h(ex.note) : ''}</p>
     <label class="btn sec" for="exPhotoIn" data-exid="${ex.id}">${ph ? 'Foto ersetzen' : '+ Foto vom Gerät'}</label><input type="file" id="exPhotoIn" accept="image/*" hidden>
   </div>
-  <div class="card"><h2>Fortschritt</h2>
+  <div class="card">${hIc('chart', 'Fortschritt')}
     ${tops.length ? `<div class="grid2"><div><p class="small muted">Erstes Training</p><b class="num">${fmtTop(ex, first.y)}</b></div><div><p class="small muted">Zuletzt</p><b class="num">${fmtTop(ex, last.y)}</b></div>
       <div><p class="small muted">Bestwert</p><b class="num">${fmtTop(ex, best)}</b></div><div><p class="small muted">Steigerung</p><b class="num">${sign(last.y - first.y)}${fmt(last.y - first.y, 2)} ${unitShort(ex) || 'Wdh.'}</b></div></div>
       ${chart([{ pts: tops, cls: 'line' }], { label: 'Höchstes Gewicht pro Training', h: 150, empty: 'Ab zwei Trainings siehst du hier die Kurve.' })}` : '<p class="empty">Noch nicht trainiert.</p>'}
     <p class="hint">${h(sg.text)}</p>
   </div>
-  ${hst.length ? `<div class="card"><h2>Verlauf</h2><div class="list">${hst.slice().reverse().map(x => `<div class="item"><span class="small muted num" style="min-width:74px">${dlong(x.date)}</span><span class="grow num small">${x.sets.map(s => fmtSet(s, ex)).join(' · ')}</span></div>`).join('')}</div></div>` : ''}
+  ${hst.length ? `<div class="card">${hIc('clock', 'Verlauf')}<div class="list">${hst.slice().reverse().map(x => `<div class="item"><span class="small muted num" style="min-width:74px">${dlong(x.date)}</span><span class="grow num small">${x.sets.map(s => fmtSet(s, ex)).join(' · ')}</span></div>`).join('')}</div></div>` : ''}
   <details class="card"><summary><b>Einstellungen bearbeiten</b></summary>${exerciseForm(ex)}</details>
   <div class="card"><button class="danger" data-act="delExercise" data-id="${ex.id}">Übung löschen</button><p class="small muted">Gespeicherte Trainings bleiben erhalten.</p></div>`;
 };
 function strengthCard() {
   const rows = all('exercises').map(ex => ({ ex, hst: exHistory(ex.id) })).filter(x => x.hst.length).sort((a, b) => a.ex.name.localeCompare(b.ex.name, 'de'));
-  if (!rows.length) return '<div class="card"><h2>Kraft je Übung</h2><p class="empty">Nach dem ersten Training siehst du hier für jede Übung, wie sich dein Gewicht steigert.</p></div>';
-  return `<div class="card"><h2>Kraft je Übung</h2><p class="small muted">Höchstes Gewicht pro Training, ohne Gewicht die meisten Wiederholungen. Antippen für alle Details.</p>
+  if (!rows.length) return `<div class="card">${hIc('dumbbell', 'Kraft je Übung')}<p class="empty">Nach dem ersten Training siehst du hier für jede Übung, wie sich dein Gewicht steigert.</p></div>`;
+  return `<div class="card">${hIc('dumbbell', 'Kraft je Übung')}<p class="small muted">Höchstes Gewicht pro Training, ohne Gewicht die meisten Wiederholungen. Antippen für alle Details.</p>
     <div class="kgrid">${rows.map(({ ex, hst }) => {
       const f = topLoad(ex, hst[0].sets), l = topLoad(ex, hst[hst.length - 1].sets), dl = l - f;
       return `<a class="kraft" href="#uebung/${ex.id}"><div class="row between"><b>${h(ex.name)}</b><span class="chip ${dl > 0 ? 'c-go' : 'c-acc'}">${dl === 0 ? 'gleich' : `${dl > 0 ? '+' : ''}${fmt(dl, 2)} ${unitShort(ex) || 'Wdh.'}`}</span></div>
@@ -1343,11 +1346,11 @@ ACT.openEx = async el => {
   const d = draft(), i = +el.dataset.i; d.idx = curIdx(d) === i ? -1 : i; await saveDraft(d); render();
   if (d.idx >= 0) document.getElementById('ex-' + i)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 };
-ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); scrollTo(0, 0); };
+ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); $('#view').scrollTo(0, 0); };
 ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); location.hash = '#training'; };
 ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); location.hash = '#training'; };
 ACT.warmSet = async el => { popSel = `[data-act="warmSet"][data-w="${el.dataset.w}"][data-s="${el.dataset.s}"]`; const d = draft(), w = d.warmup[+el.dataset.w]; w.done[+el.dataset.s] = !w.done[+el.dataset.s]; await saveDraft(d); render(); };
-ACT.warmDone = async () => { const d = draft(); d.phase = 'main'; await saveDraft(d); render(); scrollTo(0, 0); };
+ACT.warmDone = async () => { const d = draft(); d.phase = 'main'; await saveDraft(d); render(); $('#view').scrollTo(0, 0); };
 ACT.moveEntry = async el => { const d = draft(), i = +el.dataset.i, j = i + +el.dataset.dir; [d.entries[i], d.entries[j]] = [d.entries[j], d.entries[i]]; await saveDraft(d); render(); };
 ACT.removeEntry = async el => { if (!armed(el, '?')) return; const d = draft(); d.entries.splice(+el.dataset.i, 1); d.idx = clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1)); await saveDraft(d); render(); };
 ACT.restAdd = async () => { const d = draft(); d.restUntil = Math.max(d.restUntil || 0, Date.now()) + 30000; await saveDraft(d); render(); };
@@ -1401,9 +1404,9 @@ ACT.quizAnswer = el => {
     if (k === 'none') v = v.includes('none') ? [] : ['none'];
     else v = v.includes(k) ? v.filter(x => x !== k) : [...v.filter(x => x !== 'none'), k];
     quiz.a[q.id] = v; render();
-  } else { quiz.a[q.id] = k; quiz.step++; render(); scrollTo(0, 0); }
+  } else { quiz.a[q.id] = k; quiz.step++; render(); $('#view').scrollTo(0, 0); }
 };
-ACT.quizNext = () => { quiz.step++; render(); scrollTo(0, 0); };
+ACT.quizNext = () => { quiz.step++; render(); $('#view').scrollTo(0, 0); };
 ACT.quizBack = () => { quiz.step = Math.max(0, quiz.step - 1); render(); };
 ACT.quizRestart = () => { quiz = { step: 0, a: {} }; location.hash = '#beratung'; render(); };
 ACT.chooseDiet = async el => {
@@ -1565,7 +1568,7 @@ function render() {
   if (tab === 'training' && sub === 'fertig' && celebrateNext) { celebrateNext = false; celebrate(); }
   syncWakeLock();
 }
-window.addEventListener('hashchange', () => { closeViewer(); if (location.hash === '#beratung' && quiz.step >= QUIZ.length && !dietCfg()) quiz = { step: 0, a: {} }; render(); scrollTo(0, 0); });
+window.addEventListener('hashchange', () => { closeViewer(); if (location.hash === '#beratung' && quiz.step >= QUIZ.length && !dietCfg()) quiz = { step: 0, a: {} }; render(); $('#view').scrollTo(0, 0); });
 let pendingExPhoto = null;
 document.addEventListener('click', e => {
   const px = e.target.closest('[data-exid]'); if (px) pendingExPhoto = px.dataset.exid;
