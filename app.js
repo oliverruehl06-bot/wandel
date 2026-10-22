@@ -3,6 +3,7 @@
    Datenbank-Regel: Stores werden nur hinzugefügt, nie gelöscht. Jede neue Schema-Version bekommt
    einen eigenen Block in onupgradeneeded, damit bestehende Daten erhalten bleiben. */
 
+const APP_VERSION = 15; // bei jedem Update zusammen mit VERSION in sw.js erhöhen
 const DB_NAME = 'wandel';
 const DB_VER = 3;
 const STORES = {
@@ -1051,7 +1052,7 @@ VIEWS.beratung = () => {
 /* Einstellungen */
 VIEWS.setup = (sub, arg) => (SETUP[sub] || SETUP.index)(arg);
 const SETUP = {};
-SETUP.index = () => `<div class="card"><div class="list">
+SETUP.index = () => `<p class="small muted center">Wandel · Version ${APP_VERSION}</p><div class="card"><div class="list">
   ${[['training', 'Training', 'Geräte, Übungen, Pläne, Verlauf'], ['ernaehrung', 'Ernährung und Ziele', 'Ernährungsform, Bausteine, Mahlzeiten, Kalorien- und Eiweißziel'], ['gewohnheiten', 'Gewohnheiten', 'Anlegen, umbenennen, sortieren'], ['profil', 'Profil', 'Größe, Alter, Start- und Zielgewicht'], ['daten', 'Datensicherung', 'Backup erstellen und wiederherstellen']]
     .map(([k, t, s]) => `<a class="item navitem" href="#setup/${k}"><span class="navic">${icon({ training: 'dumbbell', ernaehrung: 'leaf', gewohnheiten: 'check', profil: 'user', daten: 'shield' }[k] || 'book')}</span><div class="grow"><b>${t}</b><p class="small muted">${s}</p></div>›</a>`).join('')}
   </div></div>`;
@@ -1617,6 +1618,28 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && followToday && cur !== today()) { cur = today(); if (!document.querySelector('input:focus')) render(); }
 });
 
+/* ---------- Updates ----------
+   Die App fragt beim Öffnen und beim Zurückkehren nach einer neuen Version. Ist eine da, lädt sie sich neu,
+   außer du tippst gerade etwas ein oder hast ein Mengen-Fenster offen (dann beim nächsten Öffnen). */
+async function setupUpdates() {
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    const check = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    setInterval(check, 30 * 60 * 1000);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading || !hadController) return;
+      const busy = document.querySelector('input:focus, textarea:focus, #amtSheet, #scanner');
+      if (busy) { pendingReload = true; return; }
+      reloading = true; location.reload();
+    });
+    const hadController = !!navigator.serviceWorker.controller;
+    document.addEventListener('visibilitychange', () => { if (document.hidden && pendingReload) location.reload(); });
+  } catch (e) { }
+}
+let pendingReload = false;
+
 /* ---------- Start ---------- */
 async function seed() {
   if (kv('seeded', false)) return;
@@ -1640,5 +1663,5 @@ async function seed() {
   } catch (e) {
     $('#view').innerHTML = `<div class="card"><h2>Die Datenbank konnte nicht geöffnet werden</h2><p class="small">${h(e.message)}</p><p class="small muted">Im privaten Modus von Safari funktioniert die App nicht. Bitte normal öffnen.</p></div>`;
   }
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') setupUpdates();
 })();
