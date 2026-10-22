@@ -1,7 +1,7 @@
-﻿/* Service Worker: hÃ¤lt nur den Programmcode offline vor. Die Daten (IndexedDB) fasst er nie an.
-   Bei jedem Update VERSION erhÃ¶hen, dann lÃ¤dt die App beim nÃ¤chsten Start den neuen Code. */
-const VERSION = 'wandel-v7';
-const FILES = ['./', 'index.html', 'styles.css', 'content.js', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+﻿/* Service Worker: hält nur den Programmcode offline vor. Die Daten (IndexedDB) fasst er nie an.
+   Bei jedem Update VERSION erhöhen, dann lädt die App beim nächsten Start den neuen Code. */
+const VERSION = 'wandel-v8';
+const FILES = ['./', 'index.html', 'styles.css', 'content.js', 'foods.js', 'app.js', 'food.js', 'lib/zxing.min.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -11,7 +11,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (e.request.method !== 'GET' || url.origin !== location.origin) return; // Open Food Facts usw. nicht cachen
   // Netz zuerst (damit Updates sofort ankommen), offline aus dem Cache.
   e.respondWith(
     fetch(e.request).then(res => {

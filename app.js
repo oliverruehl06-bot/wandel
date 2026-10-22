@@ -4,11 +4,12 @@
    einen eigenen Block in onupgradeneeded, damit bestehende Daten erhalten bleiben. */
 
 const DB_NAME = 'wandel';
-const DB_VER = 2;
+const DB_VER = 3;
 const STORES = {
   kv: 'key', weights: 'date', measures: 'date', nutrition: 'date', habitLog: 'date',
   habits: 'id', equipment: 'id', exercises: 'id', templates: 'id', workouts: 'id',
-  photos: 'id' // ab Version 2
+  photos: 'id', // ab Version 2
+  foods: 'id', foodlog: 'id' // ab Version 3: Lebensmittel und Ernährungstagebuch
 };
 const S = {};
 let db;
@@ -35,13 +36,16 @@ async function loadAll() {
     const rows = await reqP(db.transaction(s).objectStore(s).getAll());
     S[s] = new Map(rows.map(o => [o[STORES[s]], o]));
   }
+  foodIdx = null;
 }
 async function put(s, obj) {
+  if (s === 'foodlog') foodIdx = null;
   S[s].set(obj[STORES[s]], obj);
   const t = db.transaction(s, 'readwrite'); t.objectStore(s).put(obj);
   try { await txDone(t); } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message); throw e; }
 }
 async function del(s, key) {
+  if (s === 'foodlog') foodIdx = null;
   S[s].delete(key);
   const t = db.transaction(s, 'readwrite'); t.objectStore(s).delete(key);
   await txDone(t);
@@ -49,6 +53,20 @@ async function del(s, key) {
 const all = s => [...S[s].values()];
 const kv = (k, def) => S.kv.has(k) ? S.kv.get(k).value : def;
 const setKv = (k, value) => put('kv', { key: k, value });
+
+/* Ernährungstagebuch nach Tag; Tagessummen aus dem Tagebuch, sonst aus manuellen Summen */
+let foodIdx = null;
+function foodIndex() {
+  if (!foodIdx) { foodIdx = new Map(); for (const x of S.foodlog.values()) { if (!foodIdx.has(x.date)) foodIdx.set(x.date, []); foodIdx.get(x.date).push(x); } for (const l of foodIdx.values()) l.sort((a, b) => (a.created || 0) - (b.created || 0)); }
+  return foodIdx;
+}
+function dayNut(d) {
+  const items = foodIndex().get(d);
+  if (items?.length) { const t = items.reduce((a, x) => ({ k: a.k + x.kcal, p: a.p + x.p, f: a.f + x.f, c: a.c + x.c }), { k: 0, p: 0, f: 0, c: 0 }); return { date: d, kcal: Math.round(t.k), protein: Math.round(t.p), fat: Math.round(t.f), carbs: Math.round(t.c), src: 'food' }; }
+  const n = S.nutrition.get(d);
+  return n ? { ...n, src: 'manual' } : null;
+}
+const nutDays = () => [...new Set([...S.nutrition.keys(), ...foodIndex().keys()])].sort();
 
 /* ---------- Helfer ---------- */
 const $ = sel => document.querySelector(sel);
@@ -132,7 +150,7 @@ function phaseKcal(w) { return w > 110 ? 2200 : w > 100 ? 2100 : w > 92 ? 2050 :
 const planPct = w => w > 100 ? 0.007 : w > 92 ? 0.006 : 0.005;
 function adaptiveTdee() {
   const end = today(), start = addDays(end, -28);
-  const nut = all('nutrition').filter(n => n.date > start && n.date <= end && n.kcal);
+  const nut = nutDays().filter(d => d > start && d <= end).map(dayNut).filter(n => n && n.kcal);
   const ws = all('weights').filter(p => p.date > start && p.date <= end).sort(byDate);
   if (nut.length < 14 || ws.length < 6 || dayDiff(ws[0].date, ws[ws.length - 1].date) < 14) return null;
   const avg = nut.reduce((a, n) => a + n.kcal, 0) / nut.length;
@@ -317,7 +335,7 @@ async function migrateV3() { // Geräte in Übungen überführen, Pläne um Aufw
 /* ---------- Tagesziele & Gewohnheiten ---------- */
 const activeHabits = () => all('habits').filter(x => x.active !== false).sort((a, b) => a.order - b.order);
 function dayGoals(d, t = targets()) {
-  const n = S.nutrition.get(d), log = S.habitLog.get(d)?.done || {}, hs = activeHabits();
+  const n = dayNut(d), log = S.habitLog.get(d)?.done || {}, hs = activeHabits();
   const g = [];
   if (n?.protein != null) g.push(n.protein >= t.pMin);
   if (n?.kcal != null) g.push(n.kcal <= t.kcal * 1.05);
@@ -392,8 +410,8 @@ function bar(v, max, min) {
 const MFIELDS = [['waist', 'Bauch'], ['hip', 'Hüfte'], ['chest', 'Brust'], ['arm', 'Oberarm'], ['thigh', 'Oberschenkel'], ['neck', 'Hals']];
 function metricDefs() {
   const ts = trendSeries(), ms = all('measures').sort(byDate), t = targets();
-  const nut = all('nutrition').sort(byDate);
-  const days = [...new Set([...S.habitLog.keys(), ...S.nutrition.keys(), ...S.weights.keys()])].sort();
+  const nut = nutDays().map(dayNut).filter(Boolean);
+  const days = [...new Set([...S.habitLog.keys(), ...nutDays(), ...S.weights.keys()])].sort();
   const bf = bodyFatSeries();
   const comp = which => bf.map(p => { const w = trendAt(p.d) ?? currentWeight(); return { d: p.d, y: which === 'fat' ? w * p.y / 100 : w * (1 - p.y / 100) }; });
   const weeks = (() => {
@@ -435,13 +453,13 @@ const lis = a => `<ul class="ul">${a.map(x => `<li>${h(x)}</li>`).join('')}</ul>
 /* Tag */
 VIEWS.tag = () => {
   const d = cur, isToday = d === today(), p = prof(), t = targets();
-  const w = S.weights.get(d), n = S.nutrition.get(d) || {}, log = S.habitLog.get(d)?.done || {};
+  const w = S.weights.get(d), n = dayNut(d) || {}, log = S.habitLog.get(d)?.done || {};
   const r = weeklyRate(), st = rateStatus(r), cw = currentWeight();
   const habits = activeHabits(), dp = dietPlan(), dc = dietCfg();
   const draft = kv('draft', null), nt = nextTemplate(), ts = all('templates').sort((a, b) => a.order - b.order);
   const wk = weekStart(d), weekCount = all('workouts').filter(x => x.date >= wk && x.date < addDays(wk, 7)).length;
   const dayWorkouts = all('workouts').filter(x => x.date === d);
-  const lb = kv('lastBackup', null), hasData = S.weights.size + S.workouts.size + S.nutrition.size > 0;
+  const lb = kv('lastBackup', null), hasData = S.weights.size + S.workouts.size + S.nutrition.size + S.foodlog.size > 0;
   const needBackup = isToday && hasData && (!lb || dayDiff(lb, d) >= 7);
   const proj = projection('plan'), ms1 = milestones(proj.pts)[0];
   const meals = dc?.meals || 3, perMeal = round5(t.pMin / meals);
@@ -478,14 +496,16 @@ VIEWS.tag = () => {
       <div><p class="small muted">Fett</p><p class="num"><b>${fmt(n.fat || 0, 0)}</b> / ${t.fat[0]}–${t.fat[1]} g</p>${bar(n.fat || 0, t.fat[1], t.fat[0])}</div>
       <div><p class="small muted">Kohlenhydrate</p><p class="num"><b>${fmt(n.carbs || 0, 0)}</b> / ${t.carb[0]}–${t.carb[1]} g</p>${bar(n.carbs || 0, t.carb[1], t.carb[0])}</div>
     </div>
-    <form data-form="nutrition" class="nutform">
+    ${n.src === 'food' ? `<a class="btn sec" href="#essen">Im Tagebuch ansehen (${foodIndex().get(d).length} Einträge)</a>` : `<form data-form="nutrition" class="nutform">
       <input name="kcal" inputmode="numeric" placeholder="kcal" value="${n.kcal ?? ''}" aria-label="Kalorien">
       <input name="protein" inputmode="numeric" placeholder="Eiweiß" value="${n.protein ?? ''}" aria-label="Eiweiß in Gramm">
       <input name="fat" inputmode="numeric" placeholder="Fett" value="${n.fat ?? ''}" aria-label="Fett in Gramm">
       <input name="carbs" inputmode="numeric" placeholder="KH" value="${n.carbs ?? ''}" aria-label="Kohlenhydrate in Gramm">
       <button>OK</button>
     </form>
-    <p class="small muted">Tagessummen aus deiner Tracking-App. Pflicht sind Kalorien und Eiweiß, Fett und Kohlenhydrate sind optional. Plan: ${meals} Mahlzeiten mit je etwa ${perMeal} g Eiweiß${dc?.addons?.tre ? ', im Essensfenster' : ''}.</p>
+    <a class="btn" href="#essen/add/m">Lebensmittel erfassen</a>
+    <p class="small muted">Erfasse dein Essen im Bereich Essen, die Summen landen automatisch hier. Alternativ kannst du oben nur die Tagessummen eintragen.</p>`}
+    <p class="small muted">Plan: ${meals} Mahlzeiten mit je etwa ${perMeal} g Eiweiß${dc?.addons?.tre ? ', im Essensfenster' : ''}.</p>
   </div>
 
   <div class="card">
@@ -718,7 +738,7 @@ VIEWS.statistik = () => {
   const last30 = [...Array(30)].map((_, i) => addDays(d, -i));
   const habitDays = last30.filter(x => S.habitLog.has(x));
   const hr = habitDays.length ? habitDays.reduce((a, x) => a + (habitRate(x) || 0), 0) / habitDays.length : null;
-  const nut30 = last30.map(x => S.nutrition.get(x)).filter(Boolean);
+  const nut30 = last30.map(dayNut).filter(Boolean);
   const protOk = nut30.filter(n => n.protein >= t.pMin).length, kcalOk = nut30.filter(n => n.kcal && n.kcal <= t.kcal * 1.05).length;
   const weeksAll = (() => { const wk = all('workouts'); if (!wk.length) return { ok: 0, n: 0 }; let w = weekStart(wk.map(x => x.date).sort()[0]), ok = 0, n = 0; while (w <= weekStart(d)) { const c = wk.filter(x => x.date >= w && x.date < addDays(w, 7)).length; if (w < weekStart(d)) { n++; if (c >= 3) ok++; } w = addDays(w, 7); } return { ok, n }; })();
   const proj = projection(pmode), mss = milestones(proj.pts);
@@ -1561,7 +1581,7 @@ async function seed() {
     await migrateV3();
     if (!kv('import.last1', false)) { await importLastTraining('2026-10-21', null); toast('Oberkörper A mit deinem letzten Training angelegt'); }
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-    if (!location.hash || /^#(heute|koerper|essen|mehr)/.test(location.hash)) history.replaceState(null, '', '#tag');
+    if (!location.hash || /^#(heute|koerper|mehr)/.test(location.hash)) history.replaceState(null, '', '#tag');
     render();
   } catch (e) {
     $('#view').innerHTML = `<div class="card"><h2>Die Datenbank konnte nicht geöffnet werden</h2><p class="small">${h(e.message)}</p><p class="small muted">Im privaten Modus von Safari funktioniert die App nicht. Bitte normal öffnen.</p></div>`;

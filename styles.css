@@ -233,3 +233,29 @@ button.exhead{width:100%;color:var(--ink)}
 @keyframes cfade{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){.celebrate,.cbox,.cbox circle,.cbox path{animation:none;stroke-dashoffset:0}}
 .setrow.skipped{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+
+/* v8: Essen */
+.tabbar{grid-template-columns:repeat(6,1fr)}
+.tabbar a{font-size:.64rem}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.searchbar input{font-size:17px;padding:12px 14px;border-radius:12px}
+.fooditem{display:flex;align-items:center;gap:10px;width:100%;background:transparent;color:var(--ink);font-weight:400;padding:10px 0;border-radius:0;border-bottom:1px solid var(--line);text-align:left}
+.list > .fooditem:last-child{border-bottom:0}
+.fooditem .right{text-align:right;white-space:nowrap}
+.card.meal h2{font-size:1.1rem}
+.sheetwrap{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;display:flex;flex-direction:column;gap:12px;
+  padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet h2{font-size:1.2rem}
+.fav{font-size:1.6rem;color:var(--muted)} .fav.on{color:var(--warn)}
+.amttot{background:var(--field);border-radius:10px;padding:10px 12px;font-size:.92rem}
+.scanner{position:fixed;inset:0;z-index:40;background:#000;color:#fff;display:flex;flex-direction:column;gap:12px;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px,env(safe-area-inset-left,0px))}
+.scanner .small{color:#ccc}
+.scanbox{position:relative;flex:1;min-height:0;border-radius:16px;overflow:hidden;background:#111}
+.scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+.scanline{position:absolute;left:12%;right:12%;top:50%;height:2px;background:#5DC3A5;box-shadow:0 0 12px #5DC3A5}
+.scanner input{background:#222;color:#fff}
+.stack3{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--field)}
+.stack3 i{display:block;height:100%}
+.mp,.legend i.mp{background:var(--s0)} .mf,.legend i.mf{background:var(--s1)} .mc,.legend i.mc{background:var(--s2)}
