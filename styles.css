@@ -429,3 +429,7 @@ html{background:var(--bg)}
   --s0:#8573B9; --s2:#4C9C92;
 }}
 .bigbtn{box-shadow:0 6px 16px -10px rgba(133,115,185,.6)}
+
+/* v18: Alles unterhalb der Leiste hat die Farbe der Leiste */
+html,body{background:var(--card)}
+.topbar,main#view{background:var(--bg)}
