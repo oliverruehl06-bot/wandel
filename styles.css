@@ -259,3 +259,39 @@ button.exhead{width:100%;color:var(--ink)}
 .stack3{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--field)}
 .stack3 i{display:block;height:100%}
 .mp,.legend i.mp{background:var(--s0)} .mf,.legend i.mf{background:var(--s1)} .mc,.legend i.mc{background:var(--s2)}
+
+/* v10: Icons & Ringe */
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.chead{display:inline-flex;align-items:center;gap:8px;color:var(--accent)}
+.chead .label{color:var(--muted)}
+.chead h2{color:var(--ink)}
+.chead .mi{width:24px;height:24px;padding:5px;box-sizing:content-box;border-radius:10px;background:var(--accent-soft)}
+.meal-f .mi{color:var(--s1);background:color-mix(in srgb,var(--s1) 14%,transparent)}
+.meal-m .mi{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.meal-a .mi{color:var(--s2);background:color-mix(in srgb,var(--s2) 14%,transparent)}
+.meal-s .mi{color:var(--go);background:color-mix(in srgb,var(--go) 14%,transparent)}
+.ring{position:relative;flex:none;color:var(--rc)}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg);display:block}
+.ring circle{fill:none;stroke-width:9}
+.ring .trk{stroke:var(--field)}
+.ring .val{stroke:var(--rc);stroke-linecap:round;transition:stroke-dasharray .6s ease}
+.ring.over .val{stroke:var(--warn)}
+.ring .rin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.1}
+.ring.lg{width:132px;height:132px}
+.ring.lg .rin b{font-size:1.7rem;color:var(--ink);letter-spacing:-.02em}
+.ring.lg .rin span{font-size:.72rem;color:var(--muted)}
+.ring.lg .ic{width:22px;height:22px;margin-bottom:2px}
+.ring.sm{width:46px;height:46px}
+.ring.sm .ic{width:18px;height:18px}
+.ring.sm circle{stroke-width:11}
+.ring.xs{width:24px;height:24px}
+.ring.xs circle{stroke-width:14}
+.ringrow{display:flex;align-items:center;gap:16px}
+.macros{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0}
+.macro{display:flex;align-items:center;gap:10px;min-width:0}
+.macro b{font-size:.98rem}
+.macro b .muted{font-weight:500;font-size:.82rem}
+.mini-ring{display:inline-flex;align-items:center;gap:6px}
+.warntxt{color:var(--warn)}
+@media (max-width:340px){.ring.lg{width:110px;height:110px}.ring.lg .rin b{font-size:1.4rem}}
+@media (prefers-reduced-motion:reduce){.ring .val{transition:none}}

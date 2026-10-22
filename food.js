@@ -3,6 +3,7 @@
    Online wird nur der Suchbegriff bzw. die Barcode-Nummer an Open Food Facts geschickt. */
 const MEALS = [['f', 'Frühstück'], ['m', 'Mittag'], ['a', 'Abend'], ['s', 'Snacks']];
 const MEAL_NAME = Object.fromEntries(MEALS);
+const MEAL_ICON = { f: 'sunrise', m: 'sun', a: 'moon', s: 'apple' };
 const OFF_WORLD = 'https://world.openfoodfacts.org';
 const OFF_FIELDS = 'code,product_name,product_name_de,brands,nutriments,serving_size,serving_quantity,quantity';
 const BASE_BY_ID = new Map(BASE_FOODS.map(f => [f.id, f]));
@@ -72,7 +73,7 @@ function foodRow(f) {
 TITLES.essen = 'Essen';
 VIEWS.essen = (sub, arg) => {
   if (sub === 'add') { fs.meal = MEAL_NAME[arg] ? arg : fs.meal; return ESSEN.add(); }
-  const tabs = [['', 'Tagebuch'], ['statistik', 'Statistik'], ['eigene', 'Eigene & Gerichte']];
+  const tabs = [['', 'Tagebuch'], ['statistik', 'Statistik'], ['eigene', 'Eigene']];
   const k = sub || '';
   return `<div class="seg">${tabs.map(([t, l]) => `<button class="${k === t ? 'on' : ''}" data-act="go" data-href="#essen${t ? '/' + t : ''}">${l}</button>`).join('')}</div>` + (ESSEN[k || 'tagebuch'] || ESSEN.tagebuch)();
 };
@@ -88,20 +89,15 @@ ESSEN.tagebuch = () => {
     <button class="icon" data-act="day" data-n="1" aria-label="Nächster Tag" ${isToday ? 'disabled' : ''}>›</button>
   </div>
   <div class="card">
-    <div class="row between"><span class="label">Kalorien</span>${dp ? `<a class="chip c-acc" href="#wissen/plan">${h(dp.name)}</a>` : ''}</div>
-    <div class="row between"><div class="big">${fmt(tot.kcal || 0, 0)} <span class="small muted">/ ${fmt(t.kcal, 0)} kcal</span></div><span class="chip ${left >= 0 ? 'c-go' : 'c-warn'}">${left >= 0 ? `noch ${fmt(left, 0)}` : `${fmt(-left, 0)} drüber`}</span></div>
-    ${bar(tot.kcal || 0, t.kcal)}
-    <div class="grid3">
-      <div><p class="small muted">Eiweiß</p><p class="num"><b>${fmt(tot.protein || 0, 0)}</b> / ${t.pMin} g</p>${bar(tot.protein || 0, t.pMin)}</div>
-      <div><p class="small muted">Fett</p><p class="num"><b>${fmt(tot.fat || 0, 0)}</b> / ${t.fat[1]} g</p>${bar(tot.fat || 0, t.fat[1], t.fat[0])}</div>
-      <div><p class="small muted">KH</p><p class="num"><b>${fmt(tot.carbs || 0, 0)}</b> / ${t.carb[1]} g</p>${bar(tot.carbs || 0, t.carb[1], t.carb[0])}</div>
-    </div>
+    ${cardHead('flame', 'Tagesbedarf', dp ? `<a class="chip c-acc" href="#wissen/plan">${h(dp.name)}</a>` : '')}
+    ${nutRings(tot, t)}
     ${manual ? '<p class="small muted">Für diesen Tag sind nur manuelle Summen eingetragen. Sobald du hier Lebensmittel erfasst, zählen diese.</p>' : ''}
   </div>
   ${MEALS.map(([m, label]) => {
     const list = items.filter(x => x.meal === m), s = list.reduce((a, x) => a + x.kcal, 0), ylist = yItems.filter(x => x.meal === m);
     return `<div class="card meal">
-      <div class="row between"><h2>${label}</h2><span class="small muted num">${list.length ? fmt(s, 0) + ' kcal' : ''}</span></div>
+      <div class="row between"><span class="chead meal-${m}">${icon(MEAL_ICON[m], 'mi')}<h2>${label}</h2></span><span class="small muted num">${list.length ? `${fmt(s, 0)} kcal · ${fmt(s / t.kcal * 100, 0)} %` : ''}</span></div>
+      ${list.length ? bar(s, t.kcal) : ''}
       ${list.length ? `<div class="list">${list.map(x => `<button class="item fooditem plain" data-act="editEntry" data-id="${x.id}"><span class="grow left"><b>${h(x.name)}</b><span class="small muted block">${fmt(x.g, 0)} ${x.unit || 'g'}${x.brand ? ' · ' + h(x.brand) : ''}</span></span><span class="num small right">${fmt(x.kcal, 0)} kcal<br><span class="muted">${fmt(x.p, 0)} g E</span></span></button>`).join('')}</div>` : ''}
       <div class="row wrap">
         <a class="btn grow" href="#essen/add/${m}">+ Hinzufügen</a>
@@ -192,12 +188,12 @@ ESSEN.statistik = () => {
   const kPts = rows.map(x => ({ d: x.d, y: x.n.kcal })), pPts = rows.map(x => ({ d: x.d, y: x.n.protein || 0 }));
   return `<div class="seg">${[[7, '7 Tage'], [30, '30 Tage'], [90, '90 Tage']].map(([v, l]) => `<button class="${range === v ? 'on' : ''}" data-act="kv" data-k="food.range" data-v="${v}" data-num="1">${l}</button>`).join('')}</div>
   <div class="tiles">
-    <div class="tile"><span>Ø Kalorien</span><b>${avg('kcal') != null ? fmt(avg('kcal'), 0) : '–'}</b><small>Ziel ${fmt(t.kcal, 0)}</small></div>
-    <div class="tile"><span>Ø Eiweiß</span><b>${ap != null ? fmt(ap, 0) + ' g' : '–'}</b><small>Ziel ${t.pMin} g</small></div>
-    <div class="tile"><span>Erfasst</span><b>${rows.length}/${range}</b><small>Tage</small></div>
-    <div class="tile"><span>Ø Fett</span><b>${af != null ? fmt(af, 0) + ' g' : '–'}</b><small>${t.fat[0]}–${t.fat[1]} g</small></div>
-    <div class="tile"><span>Ø KH</span><b>${ac != null ? fmt(ac, 0) + ' g' : '–'}</b><small>${t.carb[0]}–${t.carb[1]} g</small></div>
-    <div class="tile"><span>Eiweißziel</span><b>${rows.length ? `${protOk}/${rows.length}` : '–'}</b><small>Tage erreicht</small></div>
+    <div class="tile"><span>${icon('flame')}Ø Kalorien</span><b>${avg('kcal') != null ? fmt(avg('kcal'), 0) : '–'}</b><small>Ziel ${fmt(t.kcal, 0)}</small></div>
+    <div class="tile"><span>${icon('egg')}Ø Eiweiß</span><b>${ap != null ? fmt(ap, 0) + ' g' : '–'}</b><small>Ziel ${t.pMin} g</small></div>
+    <div class="tile"><span>${icon('cal')}Erfasst</span><b>${rows.length}/${range}</b><small>Tage</small></div>
+    <div class="tile"><span>${icon('drop')}Ø Fett</span><b>${af != null ? fmt(af, 0) + ' g' : '–'}</b><small>${t.fat[0]}–${t.fat[1]} g</small></div>
+    <div class="tile"><span>${icon('bread')}Ø KH</span><b>${ac != null ? fmt(ac, 0) + ' g' : '–'}</b><small>${t.carb[0]}–${t.carb[1]} g</small></div>
+    <div class="tile"><span>${icon('target')}Eiweißziel</span><b>${rows.length ? `${protOk}/${rows.length}` : '–'}</b><small>Tage erreicht</small></div>
   </div>
   <div class="card"><h2>Kalorien pro Tag</h2>${chart([{ pts: kPts, cls: 'dots' }, { pts: rolling(kPts), cls: 'trend' }], { goal: t.kcal, label: 'Kalorien', h: 150, minPad: 50, empty: 'Ab zwei erfassten Tagen erscheint hier der Verlauf.' })}
     <p class="small muted">Punkte: Tage. Linie: 7-Tage-Schnitt. Gestrichelt: dein Ziel. Im Zielbereich (80–105 %) an ${inKcal} von ${rows.length} Tagen.</p></div>

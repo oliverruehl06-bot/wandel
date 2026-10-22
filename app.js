@@ -101,6 +101,7 @@ function slope(pts) { // pts: [{x,y}] → Steigung
 let toastTimer;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  t.style.animation = 'none'; void t.offsetHeight; t.style.animation = '';
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
 }
 
@@ -443,6 +444,55 @@ function metricDefs() {
   return defs;
 }
 
+/* ---------- Icons & Fortschrittsringe ---------- */
+const ICONS = {
+  flame: 'M12 3c.6 3 4.5 4.8 4.5 9.5a4.5 4.5 0 0 1-9 0c0-1.8.8-3.1 1.8-4 .2 1.6 1 2.5 2 2.7-.5-2.6.7-5.6.7-8.2z',
+  egg: 'M12 3c3.5 0 6 5.5 6 10a6 6 0 0 1-12 0c0-4.5 2.5-10 6-10z',
+  drop: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z',
+  bread: 'M6.5 10.5A3.8 3.8 0 0 1 8 3h8a3.8 3.8 0 0 1 1.5 7.5V19a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z',
+  sunrise: 'M3 18h18M7 18a5 5 0 0 1 10 0M12 4v4M5.2 9.2l1.6 1.6M18.8 9.2l-1.6 1.6M9 21h6',
+  sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  apple: 'M12 7.5c-2-1.5-6.5-1-6.5 4 0 4.5 3.2 9.5 6.5 7.5 3.3 2 6.5-3 6.5-7.5 0-5-4.5-5.5-6.5-4zM12 7.5c0-2 1-3.5 3-4.5',
+  scale: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8.5 10a3.5 3.5 0 0 1 7 0zM12 10l1.2-2',
+  dumbbell: 'M2 12h3M19 12h3M5 8v8M19 8v8M8 6v12M16 6v12M8 12h8',
+  check: 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM8 12.5l2.7 2.7L16.5 9.5',
+  ruler: 'M3 17L17 3l4 4L7 21zM7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2',
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z',
+  leaf: 'M5 19c0-8 5-13 15-14-1 10-6 15-14 15M5 19l7-7',
+  book: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 21H20',
+  pill: 'M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7zM7 10.5l6.5 6.5',
+  clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM12 7v5l3 2',
+  heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  camera: 'M5 7h3l1.5-2.5h5L16 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7z',
+  target: 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM12 7a5 5 0 1 0 0 10 5 5 0 1 0 0-10zM12 11a1 1 0 1 0 0 2 1 1 0 1 0 0-2z',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  user: 'M12 4a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM4 21a8 8 0 0 1 16 0',
+  shield: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z',
+  cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2'
+};
+const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[n] || ''}"/></svg>`;
+const cardHead = (ic, label, right = '') => `<div class="row between"><span class="chead">${icon(ic)}<span class="label">${label}</span></span>${right}</div>`;
+function ring(v, goal, opts = {}) { // Kreis-Fortschritt; opts: color (CSS-Variable), ic, center, cls, warnOver
+  const C = 2 * Math.PI * 42, pct = goal > 0 ? (v || 0) / goal : 0, over = opts.warnOver && pct > 1.05;
+  return `<div class="ring ${opts.cls || ''}${over ? ' over' : ''}" style="--rc:var(${opts.color || '--accent'})"><svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle class="trk" cx="50" cy="50" r="42"/><circle class="val" cx="50" cy="50" r="42" stroke-dasharray="${(Math.min(pct, 1) * C).toFixed(1)} ${C.toFixed(1)}"/></svg>
+    <div class="rin">${opts.ic ? icon(opts.ic) : ''}${opts.center || ''}</div></div>`;
+}
+function nutRings(n, t) { // großer Kalorienring plus Makros, für Essen und Tag
+  const k = n.kcal || 0, left = t.kcal - k;
+  const mac = (ic, color, v, goal, lo, label) => `<div class="macro">${ring(v, goal, { color, ic, cls: 'sm' })}<div><b class="num">${fmt(v || 0, 0)}<span class="muted"> / ${lo != null ? lo + '–' : ''}${goal} g</span></b><span class="small muted block">${label}</span></div></div>`;
+  return `<div class="ringrow">
+    ${ring(k, t.kcal, { color: '--accent', cls: 'lg', warnOver: true, center: `${icon('flame')}<b class="num">${fmt(k, 0)}</b><span>von ${fmt(t.kcal, 0)}</span>` })}
+    <div class="macros">
+      ${mac('egg', '--s2', n.protein, t.pMin, null, 'Eiweiß')}
+      ${mac('drop', '--s1', n.fat, t.fat[1], t.fat[0], 'Fett')}
+      ${mac('bread', '--s4', n.carbs, t.carb[1], t.carb[0], 'Kohlenhydrate')}
+    </div></div>
+    <p class="center small ${left >= 0 ? 'muted' : 'warntxt'}">${left >= 0 ? `Noch <b>${fmt(left, 0)} kcal</b> für heute` : `<b>${fmt(-left, 0)} kcal</b> über deinem Ziel`}</p>`;
+}
+
 /* ---------- Ansichten ---------- */
 const VIEWS = {};
 const TITLES = { tag: 'Tag', training: 'Training', uebung: 'Übung', statistik: 'Statistik', fotos: 'Fotos', wissen: 'Wissen', setup: 'Einstellungen', beratung: 'Beratung' };
@@ -478,7 +528,7 @@ VIEWS.tag = () => {
   ${needBackup ? `<div class="card warnbox"><div class="row between"><div class="grow"><h2>Backup fällig</h2><p class="small muted">${lb ? `Letzte Sicherung am ${dlong(lb)}.` : 'Noch keine Sicherung.'} Dauert 10 Sekunden.</p></div><button data-act="backup">Sichern</button></div></div>` : ''}
 
   <div class="card">
-    <div class="row between"><span class="label">Gewicht</span><span class="chip ${st.cls}">${st.text}</span></div>
+    ${cardHead('scale', 'Gewicht', `<span class="chip ${st.cls}">${st.text}</span>`)}
     <div><div class="big">${fmtF(cw)} <span class="small muted">kg Trend</span></div>
     <p class="small muted">${p.start - cw > 0.05 ? `${fmt(p.start - cw)} kg seit Start · ` : ''}Ziel ${fmt(p.goal)} kg${r ? ` · ${fmt(r.kgWeek, 2)} kg/Woche` : ''}</p></div>
     <form data-form="weight" class="row">
@@ -489,13 +539,8 @@ VIEWS.tag = () => {
   </div>
 
   <div class="card">
-    <div class="row between"><span class="label">Ernährung</span>${dp ? `<a class="chip c-acc" href="#wissen/plan">${h(dp.name)}</a>` : ''}</div>
-    <div class="grid2">
-      <div><p class="small muted">Kalorien</p><p class="num"><b>${fmt(n.kcal || 0, 0)}</b> / ${fmt(t.kcal, 0)}</p>${bar(n.kcal || 0, t.kcal)}</div>
-      <div><p class="small muted">Eiweiß</p><p class="num"><b>${fmt(n.protein || 0, 0)}</b> / ${t.pMin} g</p>${bar(n.protein || 0, t.pMin)}</div>
-      <div><p class="small muted">Fett</p><p class="num"><b>${fmt(n.fat || 0, 0)}</b> / ${t.fat[0]}–${t.fat[1]} g</p>${bar(n.fat || 0, t.fat[1], t.fat[0])}</div>
-      <div><p class="small muted">Kohlenhydrate</p><p class="num"><b>${fmt(n.carbs || 0, 0)}</b> / ${t.carb[0]}–${t.carb[1]} g</p>${bar(n.carbs || 0, t.carb[1], t.carb[0])}</div>
-    </div>
+    ${cardHead('leaf', 'Ernährung', dp ? `<a class="chip c-acc" href="#wissen/plan">${h(dp.name)}</a>` : '')}
+    ${nutRings(n, t)}
     ${n.src === 'food' ? `<a class="btn sec" href="#essen">Im Tagebuch ansehen (${foodIndex().get(d).length} Einträge)</a>` : `<form data-form="nutrition" class="nutform">
       <input name="kcal" inputmode="numeric" placeholder="kcal" value="${n.kcal ?? ''}" aria-label="Kalorien">
       <input name="protein" inputmode="numeric" placeholder="Eiweiß" value="${n.protein ?? ''}" aria-label="Eiweiß in Gramm">
@@ -509,23 +554,23 @@ VIEWS.tag = () => {
   </div>
 
   <div class="card">
-    <div class="row between"><span class="label">Training</span><span class="small muted num">${weekCount}/3 in dieser Woche</span></div>
+    ${cardHead('dumbbell', 'Training', `<span class="mini-ring">${ring(weekCount, 3, { color: '--s2', cls: 'xs' })}<span class="small muted num">${weekCount}/3 Woche</span></span>`)}
     ${dayWorkouts.map(x => `<div class="donebox"><b>✓ ${h(x.name)}</b> <span class="small muted">${workoutSets(x)} Sätze · ${fmt(workoutVol(x) / 1000, 1)} t</span></div>`).join('')}
     ${draft ? `<p><b>${h(draft.name)}</b> läuft${draft.date !== today() ? ` (für ${dlong(draft.date)})` : ''}.</p><a class="btn" href="#training">Training fortsetzen</a>
       <div class="row"><button class="sec grow" data-act="finishWorkout">Beenden und speichern</button><button class="danger grow" data-act="discardWorkout">Löschen</button></div>` :
       ts.length ? `<p class="small muted">${isToday ? 'Training auswählen und starten:' : 'Training für diesen Tag nachtragen:'}</p>
-        <div class="tplist">${ts.map(x => `<button class="${nt?.id === x.id ? '' : 'sec'}" data-act="startWorkout" data-id="${x.id}" ${x.items.length ? '' : 'disabled'}>${h(x.name)}${nt?.id === x.id ? '<small>Vorschlag</small>' : ''}${!x.items.length ? '<small>noch leer</small>' : ''}</button>`).join('')}
+        <div class="tplist">${ts.map(x => `<button class="${nt?.id === x.id ? '' : 'sec'}" data-act="startWorkout" data-id="${x.id}" ${x.items.length ? '' : 'disabled'}>${icon('dumbbell')}${h(x.name)}${nt?.id === x.id ? '<small>Vorschlag</small>' : ''}${!x.items.length ? '<small>noch leer</small>' : ''}</button>`).join('')}
         <button class="sec" data-act="startFree">Freies Training<small>ohne Plan</small></button></div>` :
       `<p class="muted small">Lege zuerst Geräte, Übungen und Pläne an.</p><a class="btn sec" href="#setup/training">Training einrichten</a>`}
   </div>
 
   <div class="card">
-    <div class="row between"><span class="label">Gewohnheiten</span><span class="small muted num">${habits.filter(x => log[x.id]).length}/${habits.length}</span></div>
+    ${cardHead('check', 'Gewohnheiten', `<span class="mini-ring">${ring(habits.filter(x => log[x.id]).length, habits.length || 1, { color: '--go', cls: 'xs' })}<span class="small muted num">${habits.filter(x => log[x.id]).length}/${habits.length}</span></span>`)}
     <div class="list">${habits.map(x => `<div class="item"><button class="check${log[x.id] ? ' on' : ''}" data-act="habit" data-id="${x.id}" aria-label="${h(x.name)} abhaken" aria-pressed="${!!log[x.id]}"></button><span class="grow">${h(x.name)}</span></div>`).join('') || '<p class="empty">Lege unter Einstellungen → Gewohnheiten welche an.</p>'}</div>
   </div>
 
   <details class="card" ${measureDue && isToday ? 'open' : ''}>
-    <summary class="row between"><span class="label">Messen</span><span class="chip ${measureDue ? 'c-warn' : 'c-go'}">${measureDue ? 'fällig' : `zuletzt ${dshort(lastMeasure.date)}`}</span></summary>
+    <summary class="row between"><span class="chead">${icon('ruler')}<span class="label">Messen</span></span><span class="chip ${measureDue ? 'c-warn' : 'c-go'}">${measureDue ? 'fällig' : `zuletzt ${dshort(lastMeasure.date)}`}</span></summary>
     <p class="small muted">Alle 2 Wochen, morgens, entspannt, Maßband waagerecht. Bauch auf Nabelhöhe, Oberarm angespannt. Bauch und Hals ergeben zusammen die Körperfett-Schätzung.</p>
     <form data-form="measure" class="stack">
       <div class="grid2">${MFIELDS.map(([k, l]) => `<label class="f">${l} (cm)<input name="${k}" inputmode="decimal" value="${S.measures.get(d)?.[k] ? fmt(S.measures.get(d)[k], 1) : ''}"></label>`).join('')}
@@ -534,7 +579,7 @@ VIEWS.tag = () => {
     </form>
   </details>
 
-  ${tip ? `<div class="card tipcard"><span class="label">Tipp</span><p class="small">${h(tip)}</p></div>` : ''}`;
+  ${tip ? `<div class="card tipcard"><span class="chead">${icon('bulb')}<span class="label">Tipp</span></span><p class="small">${h(tip)}</p></div>` : ''}`;
 };
 
 /* Laufendes Training: geführter Modus, eine Übung pro Bildschirm */
@@ -747,12 +792,12 @@ VIEWS.statistik = () => {
   const habits = activeHabits();
   return `
   <div class="tiles">
-    <div class="tile"><span>Gewicht (Trend)</span><b>${fmtF(cw)} kg</b><small>${sign(cw - p.start)}${fmt(cw - p.start)} kg seit Start</small></div>
-    <div class="tile"><span>BMI</span><b>${fmtF(b)}</b><small>${bmiClass(b)}</small></div>
-    <div class="tile"><span>Körperfett</span><b>${bf ? fmtF(bf.y) + ' %' : '–'}</b><small>${bf ? `Stand ${dshort(bf.d)}` : 'Bauch + Hals messen'}</small></div>
-    <div class="tile"><span>Bis zum Ziel</span><b>${fmt(Math.max(0, cw - p.goal))} kg</b><small>${mss.length ? `ca. ${dmonth(mss[mss.length - 1].d)}` : '–'}</small></div>
-    <div class="tile"><span>Gewohnheiten</span><b>${hr != null ? fmt(hr, 0) + ' %' : '–'}</b><small>letzte 30 Tage</small></div>
-    <div class="tile"><span>Trainings</span><b>${S.workouts.size}</b><small>${weeksAll.n ? `${weeksAll.ok}/${weeksAll.n} Wochen mit 3×` : 'gesamt'}</small></div>
+    <div class="tile"><span>${icon('scale')}Gewicht</span><b>${fmtF(cw)} kg</b><small>${sign(cw - p.start)}${fmt(cw - p.start)} kg seit Start</small></div>
+    <div class="tile"><span>${icon('target')}BMI</span><b>${fmtF(b)}</b><small>${bmiClass(b)}</small></div>
+    <div class="tile"><span>${icon('drop')}Körperfett</span><b>${bf ? fmtF(bf.y) + ' %' : '–'}</b><small>${bf ? `Stand ${dshort(bf.d)}` : 'Bauch + Hals messen'}</small></div>
+    <div class="tile"><span>${icon('flag')}Bis zum Ziel</span><b>${fmt(Math.max(0, cw - p.goal))} kg</b><small>${mss.length ? `ca. ${dmonth(mss[mss.length - 1].d)}` : '–'}</small></div>
+    <div class="tile"><span>${icon('check')}Gewohnheiten</span><b>${hr != null ? fmt(hr, 0) + ' %' : '–'}</b><small>letzte 30 Tage</small></div>
+    <div class="tile"><span>${icon('dumbbell')}Trainings</span><b>${S.workouts.size}</b><small>${weeksAll.n ? `${weeksAll.ok}/${weeksAll.n} Wochen mit 3×` : 'gesamt'}</small></div>
   </div>
 
   <div class="card">
@@ -831,7 +876,7 @@ VIEWS.fotos = () => {
       <p class="small muted">${(() => { const wa = trendAt(A.date), wb = trendAt(B.date), days = Math.abs(dayDiff(A.date, B.date)); return `${days} Tage dazwischen${wa && wb ? ` · ${sign(wb - wa)}${fmt(wb - wa)} kg` : ''}`; })()}</p>` : '<p class="small muted">Wähle zwei Fotos, um sie nebeneinander zu sehen.</p>'}
   </div>` : ''}
   ${Object.entries(byDay).map(([dd, list]) => `<div class="card"><div class="row between"><h3>${dlong(dd)}</h3><span class="small muted">${trendAt(dd) ? fmtF(trendAt(dd)) + ' kg' : ''}</span></div>
-    <div class="pgrid">${list.map(p => `<button class="thumb" data-act="openPhoto" data-id="${p.id}" aria-label="${p.pose} am ${dlong(dd)} öffnen"><img src="${p.thumb}" alt=""><span>${p.pose}</span></button>`).join('')}</div></div>`).join('') || '<div class="card"><p class="empty">Noch keine Fotos. Das erste Foto ist dein wichtigstes, auch wenn es sich unangenehm anfühlt. In ein paar Monaten wirst du froh darüber sein.</p></div>'}`;
+    <div class="pgrid">${list.map(p => `<button class="thumb" data-act="openPhoto" data-id="${p.id}" aria-label="${p.pose} am ${dlong(dd)} öffnen"><img src="${p.thumb}" alt=""><span>${p.pose}</span></button>`).join('')}</div></div>`).join('') || `<div class="card"><p class="empty">${icon('camera', 'emptyic')}<br>Noch keine Fotos. Das erste Foto ist dein wichtigstes, auch wenn es sich unangenehm anfühlt. In ein paar Monaten wirst du froh darüber sein.</p></div>`}`;
 };
 function openViewer(id) {
   const p = S.photos.get(id); if (!p) return;
@@ -887,7 +932,7 @@ KNOW.index = () => {
     ['training', 'Richtig trainieren', 'Intensität, Steigerung, Beintag'],
     ['haut', 'Abnehmen und Haut', 'Was gegen lose Haut hilft']
   ];
-  return `<div class="card"><div class="list">${items.map(([k, t, s]) => `<a class="item navitem" href="#wissen/${k}"><div class="grow"><b>${t}</b><p class="small muted">${h(s)}</p></div>›</a>`).join('')}</div></div>`;
+  return `<div class="card"><div class="list">${items.map(([k, t, s]) => `<a class="item navitem" href="#wissen/${k}"><span class="navic">${icon({ plan: 'leaf', mahlzeiten: 'clock', cheat: 'flame', formen: 'book', supplements: 'pill', training: 'dumbbell', haut: 'heart' }[k] || 'book')}</span><div class="grow"><b>${t}</b><p class="small muted">${h(s)}</p></div>›</a>`).join('')}</div></div>`;
 };
 function dietDetail(dp, mine) {
   const dc = dietCfg(), t = targets();
@@ -1002,7 +1047,7 @@ VIEWS.setup = (sub, arg) => (SETUP[sub] || SETUP.index)(arg);
 const SETUP = {};
 SETUP.index = () => `<div class="card"><div class="list">
   ${[['training', 'Training', 'Geräte, Übungen, Pläne, Verlauf'], ['ernaehrung', 'Ernährung und Ziele', 'Ernährungsform, Bausteine, Mahlzeiten, Kalorien- und Eiweißziel'], ['gewohnheiten', 'Gewohnheiten', 'Anlegen, umbenennen, sortieren'], ['profil', 'Profil', 'Größe, Alter, Start- und Zielgewicht'], ['daten', 'Datensicherung', 'Backup erstellen und wiederherstellen']]
-    .map(([k, t, s]) => `<a class="item navitem" href="#setup/${k}"><div class="grow"><b>${t}</b><p class="small muted">${s}</p></div>›</a>`).join('')}
+    .map(([k, t, s]) => `<a class="item navitem" href="#setup/${k}"><span class="navic">${icon({ training: 'dumbbell', ernaehrung: 'leaf', gewohnheiten: 'check', profil: 'user', daten: 'shield' }[k] || 'book')}</span><div class="grow"><b>${t}</b><p class="small muted">${s}</p></div>›</a>`).join('')}
   </div></div>`;
 SETUP.training = sub => {
   sub = sub === 'geraete' ? 'uebungen' : sub || 'plaene';
@@ -1205,6 +1250,7 @@ ACT.metric = async el => {
   await setKv('stats.metrics', next); render();
 };
 ACT.habit = async el => {
+  popSel = `[data-act="habit"][data-id="${el.dataset.id}"]`;
   const log = S.habitLog.get(cur) || { date: cur, done: {} };
   log.done = { ...log.done, [el.dataset.id]: !log.done[el.dataset.id] };
   await put('habitLog', log); render();
@@ -1300,7 +1346,7 @@ ACT.openEx = async el => {
 ACT.exNav = async el => { const d = draft(); d.idx = clamp(curIdx(d) + +el.dataset.d, 0, d.entries.length - 1); await saveDraft(d); render(); scrollTo(0, 0); };
 ACT.jumpTo = async el => { const d = draft(); d.idx = +el.dataset.i; d.phase = 'main'; await saveDraft(d); location.hash = '#training'; };
 ACT.goWarm = async () => { const d = draft(); d.phase = 'warm'; await saveDraft(d); location.hash = '#training'; };
-ACT.warmSet = async el => { const d = draft(), w = d.warmup[+el.dataset.w]; w.done[+el.dataset.s] = !w.done[+el.dataset.s]; await saveDraft(d); render(); };
+ACT.warmSet = async el => { popSel = `[data-act="warmSet"][data-w="${el.dataset.w}"][data-s="${el.dataset.s}"]`; const d = draft(), w = d.warmup[+el.dataset.w]; w.done[+el.dataset.s] = !w.done[+el.dataset.s]; await saveDraft(d); render(); };
 ACT.warmDone = async () => { const d = draft(); d.phase = 'main'; await saveDraft(d); render(); scrollTo(0, 0); };
 ACT.moveEntry = async el => { const d = draft(), i = +el.dataset.i, j = i + +el.dataset.dir; [d.entries[i], d.entries[j]] = [d.entries[j], d.entries[i]]; await saveDraft(d); render(); };
 ACT.removeEntry = async el => { if (!armed(el, '?')) return; const d = draft(); d.entries.splice(+el.dataset.i, 1); d.idx = clamp(d.idx || 0, 0, Math.max(0, d.entries.length - 1)); await saveDraft(d); render(); };
@@ -1498,13 +1544,17 @@ async function readImport(file) {
 }
 
 /* ---------- Router & Events ---------- */
+let lastRoute = '', popSel = null; // popSel: Element, das nach dem Neuzeichnen kurz animiert wird
 function render() {
   const [tab0, sub, arg] = (location.hash.slice(1) || 'tag').split('/');
   const tab = VIEWS[tab0] ? tab0 : 'tag';
   $('#title').textContent = TITLES[tab];
   const nav = TAB_OF[tab] || tab;
   document.querySelectorAll('#tabbar a').forEach(a => a.classList.toggle('on', a.dataset.tab === nav));
-  $('#view').innerHTML = VIEWS[tab](sub, arg);
+  const route = tab + '/' + (sub || ''), view = $('#view');
+  view.innerHTML = VIEWS[tab](sub, arg);
+  if (route !== lastRoute) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); lastRoute = route; }
+  if (popSel) { view.querySelector(popSel)?.classList.add('pop'); popSel = null; }
   if (tab === 'setup' && sub === 'daten') {
     const el = $('#persist');
     (navigator.storage?.persisted ? navigator.storage.persisted() : Promise.resolve(null)).then(p => {
